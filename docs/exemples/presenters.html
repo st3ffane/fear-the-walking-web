@@ -1,0 +1,81 @@
+﻿<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <title>Fear the walking web! Demos</title>
+
+	<script src="../../fear-the-walking-web-flesh-and-bones.js"></script>
+	<script>
+        function Client (n,p,s){
+                this.nom = n;
+                this.prenom = p;
+                this.sexe=s;
+        };
+        function BonClient (n,p,s,c){
+                Client.call(this,n,p,c);
+                this.code_promo = c;
+        }
+        BonClient.prototype.__proto__ = new Client();
+        
+        function SuperClient(n,p,s,c,i){
+                BonClient.call(this,n,p,s,c);
+                this.infos=i;
+        };
+        SuperClient.prototype.__proto__ = new BonClient();
+        
+        
+        myContext = {              
+               message : "Désolé, pas d'informations sur ce client!",
+               client1 : new Client("PONTEINS","Stéphane","M"),
+               client2 : new BonClient("PITT","Bébert","M", 3246),
+               client3 : new SuperClient("CHOSE", "Roselyne","F",3255),
+               client4 : null,
+               
+        };
+        
+       
+        </script>
+  </head>
+  <body data-context="myContext">
+        <!-- le conteneur pour les presenters -->
+	<div data-role="presenters">
+        
+                <div id="fallback_presenter" data-role="presenter">
+			<!-- dans un fallback, le contexte de données est le contexte global! -->
+			<div>
+                                <h1>{binding from:message}</h1>
+                        </div>
+		</div>
+
+		<!-- le presenter pour afficher les données d’un client -->
+		<div id="client_presenter" data-role="presenter">
+			<div>
+				<!-- a l’interieur d’un presenter, le context de données change et devient l’objet a afficher (ici: MyContext.client) -->
+				<h1>{binding from:nom}</h1>
+				<h2>{binding from:prenom}</h2>
+			</div>
+                        <div data-type="BonClient">
+				<!-- a l’interieur d’un presenter, le context de données change et devient l’objet a afficher (ici: MyContext.client) -->
+				<h1>nom: {binding from:nom}</h1>
+				<h2>prénom: {binding from:prenom}</h2>
+                                <h3>code: {binding from:code_promo}</h3>
+			</div>
+                        <div data-type="fallback">
+				<!-- a l’interieur d’un presenter, le context de données change et devient l’objet a afficher (ici: MyContext.client) -->
+				<h1>data type: {binding from:message}</h1>
+			</div>
+		</div>
+	</div>
+	<!-- affiche le contenu de MyContext.client en utilisant le presenter dont
+l’identifiant est “client_presenter” -->
+        <h3>Mon premier client:</h3>
+	<div>{binding from:client1 presenter:client_presenter}</div>
+        <h3>Mon second client:</h3>
+        <div>{binding from:client2 presenter:client_presenter deep:false}</div>
+        <h3>Mon troisieme client:</h3>
+        <div>{binding from:client3 presenter:client_presenter deep:false}</div>
+        <h3>Un client NULL:</h3>
+        <div>{binding from:client4 presenter:client_presenter}</div>
+
+
+  </body>
+</html>

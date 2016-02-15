@@ -1,0 +1,38 @@
+﻿<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <title>Fear the walking web! Demos</title>
+
+	<script src="../../fear-the-walking-web-flesh-and-bones.js"></script>
+	<script>
+        myContext = {
+                app_name:"Stéphane",
+                _invisible_shadow : 12,//invisible pour le framework
+                ma_valeur : 13.387,
+        };
+        
+        //pour pouvoir utiliser la valeur d'invisble_shadow, on crée une property type getter/setter
+        //le nom de cette property sera le nom a utiliser pour les bindings
+        Object.defineProperty(myContext,"hello",{
+                get: function(){return this._invisible_shadow +1;},
+                set:function(val){this._invisible_shadow = val;}
+        });
+        
+        function localize(value, after_dot_count){
+          //remplace le point par une virgule
+          if (value == null) return "";
+          after = after_dot_count || 2;
+          return  value.toLocaleString("fr-FR",{maximumFractionDigits:after, minimumFractionDigits:after});
+
+        }
+        </script>
+  </head>
+  <body data-context="myContext">
+        <h1>bonjour {binding from:app_name fallback:'Oups, vous etes un inconnu...'}</h1>
+        <h2>vous avez: {binding from:hello} ans</h2>
+        <h2>Localisée: {binding from:ma_valeur converter:localize}</h2>
+        <h2>localisée aussi: {binding from:ma_valeur converter:localize converter_params:3}</h2>
+
+        <a href="#" onclick="myContext.app_name=null;">Fallback: met le nom a null!</a>
+  </body>
+</html>

@@ -1,0 +1,298 @@
+﻿<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <title>Fear the walking web! Demos</title>
+
+	<script src="../../fear-the-walking-web-flesh-and-bones.js"></script>
+	<script>
+        function Client (id, n,p,s){
+                //on ajoute un identifiant unique au client (comme s'il provennait d'une base de données par exemple)
+                //generateUUID() est une methode définie dans le framwork qui fait ce que son nom indique...
+                this.id = id;
+                //mes proprietes cachees
+                this._Nom = n;
+                this._Prenom = p;
+                this._Sexe = s;
+                
+                //initialise mon objet, si pas de parametres, initialise par defaut
+                
+                Object.defineProperty(this,"nom",{
+                        get: function(){return this._Nom;},
+                        set: function(v){
+                                console.log(this);
+                                //n'autorise pas les valeurs nulles
+                                if(v == null || v == undefined || v.trim()=="") {
+                                        //envoie un message a l'utilisateur
+                                        throw new Error ("Le Nom doit etre renseigné");
+                                }
+                                console.log("modifie le nom avec: "+v);
+                                //sinon, fait les modifications
+                                this._Nom = v;
+                                console.log("Nouveau nom: "+this._Nom);
+                                //oups, pas encore bindé...
+                                /*if(this.notifyDatasetChanged) {
+                                        this.notifyDatasetChanged("nom");
+                                        console.log("notifiy");
+                                }*/
+                                
+                        }
+                });  
+                
+                Object.defineProperty(this,"prenom",{
+                        get: function(){return this._Prenom;},
+                        set: function(v){
+                                //n'autorise pas les valeurs nulles
+                                if(v == null || v == undefined || v.trim()=="") {
+                                        //envoie un message a l'utilisateur
+                                        throw new Error ("Le prenom doit etre renseigné aussi!");
+                                }
+                                this._Prenom = v;
+                                /*if(this.notifyDatasetChanged) {
+                                        this.notifyDatasetChanged("prenom");
+                                        console.log("notifiy");
+                                }*/
+                                
+                        }
+                });  
+                Object.defineProperty(this,"sexe",{
+                        get: function(){return this._Sexe;},
+                        set: function(v){
+                                //n'autorise pas les valeurs autres que M,F et U
+                                if(v == null || v == undefined || v.trim()=="") {
+                                        //envoie un message a l'utilisateur
+                                        throw new Error ("Le Sexe doit etre renseigné");
+                                }
+                                if (v=='M' || v=='F' || v=='U'){
+                                        this._Sexe = v;
+                                }
+                                else throw new Error ("Le sexe renseigné est inconnu!");
+                                
+                        }
+                });   
+                
+                
+                
+                
+        };
+       
+               
+        
+        
+        
+        myContext = {  
+                //une liste de clients renseignée par défaut
+                clients : [ new Client(generateUUID(),"MANSON","Marylin","U"),new Client(generateUUID(),"MALLOW","Marc","M"), new Client(generateUUID(),"DALTON","M'a","F")],
+                //le client selectionné à éditer
+                selected : null,
+                
+                //pour les exemples de bindings
+                message : null, //binding input type=text
+                types : true, //binding checkbox
+                possible:null,//la selection du select
+                possibles : [ {value:"fr",label:"Bonjour"},{value:"en",label:"Hello"},{value:"es",label:"Ola"}], //les differentes possibilités value:valeur
+                
+                _Verifiable : "ma valeur par defaut" , //une propriété qui ne doit pas etre null!
+                _Numeric : 3,
+        };
+        
+        //on crée une property javascript type getter/setter avec les verifications
+        Object.defineProperty(myContext,"Verifiable",{
+                get: function(){return this._Verifiable;},
+                set: function(value){
+                        console.log("Verification des infos:"+value)
+                        if (value==null || value==undefined || value==""){
+                                //on refuse la modification
+                                console.log("erreur");
+                                throw new Error("Désolé, cette information est obligatoire!");
+                        }       
+                        //sinon, on modifie
+                        this._Verifiable = value;
+                }
+        });
+        Object.defineProperty(myContext,"numeric",{
+                get:function(){return this._Numeric;},
+                set:function(value){
+                        if (value>0) this._Numeric = value;
+                        else throw new Error("Only positive values!");
+                }
+        });
+       
+        myContext.delete_client = function(evt, id){
+                //recherche l'index du client a supprimer
+                for (i=0;i<this.clients.length;i++){
+                        //si l'id est le bon
+                        if (this.clients[i].id == id){
+                                //supprime le du tableau
+                                this.clients.splice(i,1);
+                                break;
+                        }
+                }
+        }
+        myContext.add_client = function(evt){
+                //ajoute un nouveau client à la liste
+                cl = new Client();
+                //selectionne le pour edition
+                this.selected = cl;
+        };
+        
+        myContext.edit_client = function(evt, id){
+                //comme pour le delete, recherche le client à editer
+                for (i=0;i<this.clients.length;i++){
+                        //si l'id est le bon
+                        if (this.clients[i].id == id){
+                                //Trouvé
+                                this.selected = this.clients[i];
+                                break;
+                        }
+                }
+                
+                 console.log(BINDINGS);
+        };
+        
+        
+        myContext.action_submit = function(evt, params){
+        
+                evt.preventDefault();//ne pas oublier ca....
+                id = this.selected.id;
+                
+                console.log("action_submit called "+id);
+                //si le client a deja un id, met a jour, sinon, enregistre un nouveau
+                if (id){
+                        //une simple mise a jour des infos
+                        console.log("mise a jour des données...");
+                } else {
+                        
+                        //cree un id pour ce client
+                        this.selected.id=generateUUID();
+                        //ajoute a la liste
+                        this.clients.push(this.selected);
+                        //remet selected a null
+                        this.selected = null;
+                }
+                
+                //pour eviter le rechargment de la page
+                console.log("renvoie false pour annuler....");
+                return false;
+       };
+        
+        
+        //un converter pour determiner la classe CSS a appliquer 
+        function is_selected (value, params){
+                
+                if (value){
+                        
+                        //recupere l'index de l'objet
+                        for (i=0;i<myContext.clients.length;i++){
+                                if (myContext.clients[i].id == value.id){
+                                        //genere la regle css a appliquer
+                                        index = i+1;//nth-child commence à 1!
+                                        style=".list li:nth-child("+index+"){background:#E3E3E3;}";
+                                        return style;
+                                }
+                        }
+                        
+                }
+                return " ";//si pas de selection, renvoie vide
+        };
+       //si id existe, renvois 'block', sinon "none" comme valeur du display
+       function got_id (v, params){
+                console.log("got_id:"+v);
+                if( v == undefined ) return 'display:block;';
+                else return 'display:none;';
+       };
+       
+        
+  </script>
+ 
+  </head>
+  <body data-context="myContext">
+        <div data-role="presenters">
+		<!-- le presenter pour afficher les données du tableau -->
+		<div id="client_item_presenter" data-role="presenter">
+                <!--ici, on n'utilise pas un div mais un LI puisqu'on veut afficher dans un UL-->
+
+			<li>
+                                        <!-- on crée un lien avec 2 bindings: un sur l'event clic et un sur le contenu du lien... -->
+                                        <a href="#" data-binded-click="{binding command:edit_client command_params:$id}">Nom: {binding from:nom}</a>&nbsp;
+                                        <span>Prénom: {binding from:prenom}</span>&nbsp;
+                                        <!-- On cree une commande qui prend en parametre optionnel l'identifiant du client pour pouvoir le retrouver -->
+                                        <a href="#" data-binded-click="{binding command:delete_client command_params:$id}">Supprimer</a>
+                               
+			</li>
+                </div>
+                <!-- un presenter utilisé comme formulaire -->
+                <div id="client_formulaire" data-role="presenter">
+                        
+                        <form  data-binded-submit="{binding command:action_submit}">
+                                <!--on cree un binding 2way vers myContext.selected.nom, et on demande la mise a jour de l'UI par l'event input -->
+                                <input type="text" data-binded-value="{binding from:nom mode:2way fallback:'Le nom du client' event:input}" required></input><br/>
+                                <!--on cree un binding 2way vers myContext.selected.prenom, et on demande la mise a jour de l'UI par l'event blur (par defaut) -->
+                                <input type="text" data-binded-value="{binding from:prenom mode:2way fallback:'Le prenom du client'}" required></input><br/>
+                                
+                                <!-- binding avec un radiogroup utilise l'event click pour recuperer les changements, c'est un peu la seule facon de faire...-->
+                                <input type="radio" value="M" data-binded-checked="{binding from:sexe mode:2way}" name="sexe">Masculin</input>
+                                <input type="radio" value="F" data-binded-checked="{binding from:sexe mode:2way}"name="sexe" >Feminin</input>
+                                <input type="radio" value="U" data-binded-checked="{binding from:sexe mode:2way fallback:true}" name="sexe">Inconnu</input><br/>
+                                
+                                <!-- on ajoute un submit au cas ou... -->
+                                <input type="submit" data-binded-style="{binding from:id converter:got_id}" value="Enregistrer" ></input>
+                        </form>
+                        
+                        <div data-type="fallback">
+                                <!-- si le client est null, un simple message???? -->
+                                <h3>Selectionnez un client pour l'editer ou cliquez sur "Ajouter un nouveau client"</h3>
+                                
+                        </div>
+                </div>
+                
+                <div id="datalist_item_presenter" data-role="presenter">
+                        <option value="{binding from:value}">{binding from:label fallback:'--'}</option>                
+                </div>
+               
+        </div>
+        <!-- on tente le coup: generer un style par binding? 
+        OK? DOMMANGE QU4IL FAILLE LE DECLARER dans le body pour prendre en compte les bindings....-->
+        <style>{binding from:selected converter:is_selected}</style>
+        
+        
+        <h3>Une simple liste de clients:</h3>
+        <ul class="list">{binding from:clients item_presenter:client_item_presenter}</ul>
+        <div>{binding from:selected presenter:client_formulaire}</div>
+        <a href="#" data-binded-click="{binding command:add_client}">Creer un nouveau client...</a><br/>
+        
+        
+        
+        
+        <h3>Quelques exemples de binding 2way</h3>
+        
+        <h4>input type=text, url, mail, number... </h4>
+        <input type="text" data-binded-disabled="{binding from:types fallback:true}" data-binded-value="{binding from:message mode:2way event:input fallback:'Votre message ici'}"></input><br/>
+        <span>Votre message:{binding from:message fallback:'Rien a afficher'}</span><br/>
+        
+        
+        <h4>input type=checkbox: disable/enable l'input text au dessus!</h4>
+        <!-- binding avec un checkbox event click ET VALUE="" (sinon, marche pas!!!)-->
+        <input id="chk" type="checkbox" data-binded-checked="{binding from:types mode:2way event:change}">Disable text!</input>
+        
+        <br/><span>Type selectionné:{binding from:types fallback:'Pas de type'}</span>
+        
+        
+        <h4>datalist...</h4>
+        <input type="text" data-binded-value="{binding from:possible mode:2way fallback:fr}" list="myList"></input>
+        <datalist id="myList">{binding from:possibles item_presenter:datalist_item_presenter}</datalist>
+        <span>langue: {binding from:possible}</span>
+        <h4>...ou select</h4>
+        <select data-binded-value="{binding from:possible mode:2way}">{binding from:possibles item_presenter:datalist_item_presenter}</select>
+        <span>langue: {binding from:possible}</span>
+        
+        
+        <h4>Setters</h4>
+        <form id="testform">
+        <input id="test" type="text" data-binded-value="{binding from:Verifiable mode:2way fallback:'invalid value'}"></input>
+        <input id="test2" type="number" data-binded-value="{binding from:numeric mode:2way fallback:3}"></input>
+        <input type="submit" value="OK" style="display:none;"></input>
+        </form>
+        
+  
+  </body>
+</html>

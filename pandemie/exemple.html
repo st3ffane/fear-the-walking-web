@@ -1,0 +1,341 @@
+﻿<!DOCTYPE html>
+<!-- 
+La navigation dans le framework est divisée en pages (à la facon de JQuery).Par defaut, la premiere rencontrée dans le document HTML sera la premiere de l'application.
+Une page (en general un DIV) doit avoir un ID unique dans la document, doit posseder l'attribut data-role="page".
+Si vous ne voulez pas que la page soit enregistrée dans l'historique de navigation, vous devez rajoutter l'attribut data-nohistory
+
+Vous pouvez mettre autant de pages que vous desirez dans une application FTW², chaque page ayant un id unique dans le document html.
+ Pour naviguer de page en page, il suffit de creer un lien ayant pour valeur de href l'id de la page visée précédé par un #. 
+ (par exemple href="#page2ID") 
+ 
+ Une page se compose:
+
+        DIV class='page_content': OBLIGATOIRE, definie une vue pour cette page (on verra avec les fragments ce que cela signifie).
+        un header: OPTIONNEL, generalement, on y place le titre de l'application, ainsi que des commandes ou boutons de navigations. 
+Si le header est donné a la page, un bouton RETOUR sera automatiquement ajouté dans le coin gauche lorsque necessaire. 
+Si vous ne voulez pas mettre de header, vous aurez a rajouter le bouton RETOUR manuellement (qui s'ecrit simplement < a href="#BACK">retour<a>)
+        un footer: OPTIONNEL, pour l'instant, ne sert qu'a afficher une ligne de texte -ON VERRA SI ON A BESOIN D'EN FAIRE AUTRECHOSE...
+ 
+Navigation et Events:
+        Dans une page, on peut definir 4 events distinct:
+            navigation vers la page:
+                data-onrestore: recupere les informations enregistrées lors du dernier passage sur la page
+                data-onload: la page est chargée, un bon endroit pour lancer des requetes AJAX ou autre...
+                
+            navigation depuis la page:
+                data-onunload: la page va se fermer, si renvoie false, la navigation est annulée
+                data-onsave: ici, on peut renvoyer les données de la page qu'on souhaite sauvegarder pour la prochaine fois.
+        Les valeurs de ces attributs sont le nom de méthodes du contexte de données global à appeler.
+ -->
+<head>
+        <meta charset="utf-8">
+        <title>Fear the walking web! PANDEMIE</title>
+	<link rel="stylesheet" href="fear-the-walking-web-0.1.css"/>
+	
+	<script src="fear-the-walking-web-pandemie.js"></script>
+	<script>
+        //mon contexte de données, comme toujours...
+        myContext = {
+                //app_name est une propriété particulière du context:
+                //      sert a définir(si renseigné) le nom utilisé dans le localStorage
+                app_name:"ftw2 pandemie", 
+                
+                //qqs propriétés pour les bindings de l'application a titre d'exemple
+                global_infos : ["Bonjour","un menu","dans le","panel global"],
+                frg_msg : "message par defaut",
+                
+                //le formulaire
+                frm_message: null,//textarea
+                frm_int: null,//int chooser
+                frm_text : null,//text
+                frm_check : false,
+        };
+        
+        
+        //events pour la dialog "glb_dialog" -------------------------------------------------------
+        //le onload prend en parametre la dialog elle meme, bizarement?
+        myContext.glb_dlg_load = function( dialog ){
+                console.log("OnLoad pour la dialogue globale!");
+        };
+        myContext.glb_dlg_unload = function(){
+                console.log("OnUnload pour la dialogue globale!");
+        };
+        
+        //events pour le fragment ------------------------------------------------------------------
+        //resorestate prend en parametre un objet JSON contenant les données de la derniere session
+        myContext.frg_restore = function(datas){
+                console.log("restore fragment");
+                if (datas){
+                        this.frg_msg = datas.message || "message par defaut";
+                };
+        };
+        //savestate renvoie un objet a sauvegarder pour la prochaine session
+        myContext.frg_save = function(){
+                console.log("save fragment");
+                return {message:"youou, on me sauvegarde!"};
+        };
+        
+        //load: 
+        myContext.frg_load = function(){
+                console.log("fragment load");
+        };
+        myContext.frg_unload = function(){
+                console.log("fragment unload");
+                return true;
+        };
+        
+        //events pour la page     ------------------------------------------------------------------
+        //resorestate prend en parametre un objet JSON contenant les données de la derniere session
+        myContext.pg_restore = function(datas){
+                console.log("restore page");
+        };
+        //savestate renvoie un objet a sauvegarder pour la prochaine session
+        myContext.pg_save = function(){
+                console.log("save page");
+        };
+        
+        //load: 
+        myContext.pg_load = function(){
+                console.log("page load");
+        };
+        myContext.pg_unload=function(){
+                console.log("page unload");
+                return true;//si false, empeche la navigation
+        };
+        
+        
+        
+        //gestion des events pour les pages
+        myContext.ter_restore = function(datas){
+                console.log(datas);
+                if (!datas) return;
+                this.frm_text = datas.text;
+                this.frm_message = datas.message;
+                this.frm_check = datas.check;
+                this.frm_int = datas.numbr;
+                
+        };
+        myContext.ter_save = function(){
+                obj = { text:this.frm_text,
+                        message: this.frm_message,
+                        check: this.frm_check,
+                        numbr: this.frm_int};
+                return obj;
+        };
+        
+        </script>
+	
+</head>
+
+<!-- on n'oublie pas de renseigner le contexte de l'application! -->
+<body data-context="myContext"> 
+
+        <!-- les presenters pour mes objets. Ils sont définis directement sous la balise <body> et 
+        donc utilisables par toutes les pages de l'application.     
+        
+        TODO: permettre de definir des models internes a une page (cad, garantis accessibles
+        uniquement a la page/view -->
+        <div data-role="presenters">
+                <div data-role="presenter" id="glb_pnl_presenter">
+                        <li><H2>{binding from:$this}</h2></li>
+                </div>
+        </div>
+
+        
+        
+        <!-- Les panels et dialogues peuvent etre defini globalement, cad qu'il seront accessibles par 
+        toutes les pages en créant un lien vers eux du type #ID_PANEL/ID_DIALOG -->
+        <div id="glb_panel" data-role="panel">
+                <span>panel global: peu etre appelée par toutes les pages par un lien href="#ID_du_panel"</span>
+                <ul>{binding from:global_infos item_presenter:glb_pnl_presenter}</ul>
+        </div>
+        
+        <!-- 
+                les dialogues peuvent renseigner l'attribut "data-onload" et "data-onunload" aussi!
+        -->
+        <div data-role="dialog" id="glb_dialog" data-onload="glb_dlg_load" data-onunload="glb_dlg_unload">
+                <span>Une dialogue Globale: peu etre appelée par toutes les pages par un lien
+                href="#ID_de_la_dialog"</span>
+        </div>
+        
+        
+        <!-- les fragments permettent d'empaqueter certaines parties du code HTML pour les reutiliser
+        dans les pages/views 
+        events:
+                comme pour une page "normale", les fragments utilisent les events onload, onunload, onrestore, onsave...
+                
+        TODO: permettre de deporter le code HTML et JS dans d'autres pages et les charger via AJAX-->
+        
+        <div data-role="fragments">
+                <!-- id DOIT etre renseigné -->
+                <div id="fgr_exemple" data-role="fragment">
+                        <span>Fragment message: {binding from:frg_msg fallback:'no message'}!</span>
+                </div>
+        </div>
+
+        
+        
+        
+        
+        <!-- Une application FTW² Pandémie est divisée en pages
+        TODO: permettre de deporter le code HTML et JS dans d'autres pages et les charger via AJAX
+        -->
+        <div data-role="page" id="main_page"
+                        data-onrestore="pg_restore"
+                        data_onload = "pg_load"
+                        data-onunload = "pg_unload"
+                        data-onsave="pg_save">
+                <!-- dialogs et panels commun a toutes les views -->
+                
+                
+                
+                <!-- defini une simple view 
+                normalement, utilisera le type de navigateur pour determiner si mobile, TV, desktop....
+                pour l'instant, utilise la dimension de la page le temps de tester tout ca...
+                
+                TODO: prendre en compte l'orientation?
+                TODO: events de load/save/restore/unload?
+                -->
+                <div data-role="view" data-type="desktop">
+                        
+                        <!-- ici, on peut definir des dialogues et panels specifiques a la vue -->
+                        <div id="inner_panel" data-role="panel">
+                                <span>un inner panel!</span><br/>
+                                <span>{binding from:app_name}</span>
+                        </div>
+                        <div data-role="dialog" id="inner_dialog">
+                                <span>une inner dialog</span>
+                        </div>
+                        
+                        
+                        <!-- le contenu de la page de l'application -->
+                        <div class="page_content">
+                        
+                                <!-- une page peu contenir un en-tete: en regle generale, contient le nom de l'application, un bouton "retour" qi se met
+                                en place automatiquement, et peu contenir des commandes pour naviguer vers d'autres pages ou afficher panels et dialogues 
+                                
+                                TODO: prevoir sous menus?-->
+                                <header>
+                                        <span>{binding from:app_name}</span>
+                                        <!-- quelques commandes pour la page 
+                                        TODO: definir les styles par defaut...-->
+                                        <div class="commands">
+                                                <!-- affichage du panel global -->
+                                                <a href="#glb_panel" class="ui-btn ui-btn-round ui-btn-notext ui-icon-bars">menu </a>
+                                                <!-- affichage du panel local a la page -->
+                                                <a href="#inner_panel" class="ui-btn ui-btn-round ui-btn-notext ui-icon-done">menu2 </a>
+                                                <!-- navigation vers une autre page -->
+                                                <a href="#second_page" class="ui-btn ui-btn-round ui-btn-notext ui-icon-fav">autre page </a>
+                                        </div>
+                                        
+                                </header>
+                                <!-- le contenu de la page -->
+                                <div>
+                                        le contenu de ma page....<br/>
+                                        On peu ouvrir des boites de dialogues: <a href="#glb_dialog">Dialog globale</a> ou <a href="#inner_dialog">Locale</a><br/>
+                                        On peu ouvrir les panels: <a href="#inner_panel">Panel local</a><br/>
+                                        <div id="hello_frag" data-role="fragment" data-fragment-id="fgr_exemple"
+                                        data-onrestore="frg_restore"
+                                        data_onload = "frg_load"
+                                        data-onunload = "frg_unload"
+                                        data-onsave="frg_save"></div>
+                                        
+                                </div>
+                                <!-- une page peu aussi contenir un footer, pour l'instant, juste decoratif 
+                                
+                                TODO: permettre de mettre des commandes dedans?-->
+                                <footer>
+                                        <span>{binding from:app_name}</span>
+                                </footer>
+                        </div>
+                </div>
+                
+                <!-- une vue pour les applis mobiles -->
+                <div data-role="view" data-type="mobile">
+                        
+                        <div class="page_content">
+                                <!-- une page peu contenir un en-tete: en regle generale, contient le nom de l'application, un bouton "retour" qi se met
+                                en place automatiquement, et peu contenir des commandes pour naviguer vers d'autres pages ou afficher panels et dialogues -->
+                                <header>
+                                        <span>{binding from:app_name}</span>
+                                        <!-- quelques commandes pour la page -->
+                                        <div class="commands">
+                                                <!-- affichage du panel global -->
+                                                <a href="#glb_panel" class="ui-btn ui-btn-round ui-btn-notext ui-icon-bars">menu </a>
+                                                
+                                        </div>
+                                        
+                                </header>
+                                <!-- le contenu de la page -->
+                                <div>
+                                le contenu de ma page....
+                                
+                                </div>
+                                <!-- une page peu aussi contenir un footer, pour l'instant, juste decoratif -->
+                                <footer>
+                                        <span>{binding from:app_name}</span>
+                                </footer>
+                        </div>
+                </div>
+                
+        
+        </div>
+        
+        <!--une seconde page pour l'application -->
+        <div data-role="page" id="second_page">
+                <!-- ici, la page sera la meme qqsoit le type de navigateur (mobile, desktop...) -->
+                <div class="page_content">
+                
+                        <header><span>{binding from:app_name}</span></header>
+                        <div><a href="#ter_page">Aller a la troisieme page</a><br/>
+                        <a href="#last_page">Aller a la derniere page</a></div>
+                        <footer><span>Un footer pour la seconde page</span></div>
+                </div>
+        
+        </div>
+        <!--une troisieme page pour l'application -->
+        <div data-role="page" id="ter_page"data-onrestore="ter_restore"
+                        data-onsave="ter_save">
+                <!-- ici, la page sera la meme qqsoit le type de navigateur (mobile, desktop...) -->
+                <div class="page_content">
+                
+                        <header><span>{binding from:app_name}</span></header>
+                        <div>
+                                <h2>Un exemple pour enregistrer/restaurer les states:</h2>
+                                <h3>Les données de se formulaire seront sauvegardées dans l'etat de la page...</h3>
+                                <form>
+                                        <!-- fait un tour de tous les widgets -->
+                                        <input type="text" data-binded-value="{binding from:frm_text mode:2way fallback:'entrez un mot ici'}"></text>
+                                        <textarea data-binded-value="{binding from:frm_message mode:2way fallback:'entrez un message ici'}"></textarea>
+                                        <input type="int" data-binded-value="{binding from:frm_int mode:2way fallback:0}"></input>
+                                        
+                                        <!-- checkbox  -->
+                                        
+                                        <input id="checker" type="checkbox" data-binded-checked="{binding from:frm_check fallback:false}"></input>
+                                        <label for="checker">Check me!</label>
+                                
+                                </form>
+                                <br/>
+                                <a href="#last_page">Aller a la derniere page</a>
+                        
+                        </div>
+                        <footer><span>Un footer pour la seconde page</span></div>
+                </div>
+        
+        </div>
+        <!--une derniere page pour l'application -->
+        <div data-role="page" id="last_page">
+                <!-- ici, la page sera la meme qqsoit le type de navigateur (mobile, desktop...) -->
+                <div class="page_content">
+                
+                        <header><span>{binding from:app_name}</span></header>
+                        <div>Suivant d'ou vous arriver (seconde ou troisieme page), le bouton "BACK" se comporte differement!<br/>
+                        <a href="#main_page">Retour direct a la premiere page(garde l'historique)</a></div>
+                        <footer><span>Un footer pour la seconde page</span></div>
+                </div>
+        
+        </div>
+
+
+</body>
+</html>

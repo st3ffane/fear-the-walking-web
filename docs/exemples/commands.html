@@ -1,0 +1,64 @@
+﻿<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <title>Fear the walking web! Demos</title>
+
+	<script src="../../fear-the-walking-web-flesh-and-bones.js"></script>
+	<script>
+        function Client (n,p,s){
+                //on ajoute un identifiant unique au client (comme s'il provennait d'une base de données par exemple)
+                //generateUUID() est une methode définie dans le framwork qui fait ce que son nom indique...
+                this.id = generateUUID();
+                this.nom = n;
+                this.prenom = p;
+                this.sexe=s;
+        };
+        myContext = {  
+                //une liste de clients renseignée par défaut
+                clients : [ new Client("MANSON","Marylin","???"),new Client("MALLOW","Marc","M"), new Client("DALTON","M'a","F")],
+                
+        };
+        //paramètres: evt: l'objet event généré (ici ClickEvent), et les paramètres optionnels
+        //comme je ne défini qu'un seul paramètre -id- je le  recupère directement,
+        //si j'en avait défini plusieurs, on aurait eu un tableau
+        myContext.delete_client = function(evt, id){
+                //recherche l'index du client a supprimer
+                for (i=0;i<this.clients.length;i++){
+                        //si l'id est le bon
+                        if (this.clients[i].id == id){
+                                //supprime le du tableau
+                                this.clients.splice(i,1);
+                                break;
+                        }
+                }
+        }
+        myContext.add_client = function(evt){
+                //ajoute un nouveau client à la liste, en dur pour l'instant...
+                //le fait d'appeller push sur mon tableau suffit a mettre a jour l'UI!!!
+                this.clients.push(new Client("NOUVEAU","Client","F"));
+        };
+        
+  </script>
+  </head>
+  <body data-context="myContext">
+        <div data-role="presenters">
+		<!-- le presenter pour afficher les données du tableau -->
+		<div id="client_item_presenter" data-role="presenter">
+                <!--ici, on n'utilise pas un div mais un LI puisqu'on veut afficher dans un UL-->
+
+			<li>
+				<span>Nom: {binding from:nom}</span>&nbsp;
+				<span>Prénom: {binding from:prenom}</span>&nbsp;
+                                <!-- On cree une commande qui prend en parametre optionnel l'identifiant du client pour pouvoir le retrouver -->
+                                <a href="#" data-binded-click="{binding command:delete_client command_params:$id}">Supprimer</a>
+			</li>
+                </div>
+                
+        </div>
+        <h3>Une simple liste de clients:</h3>
+        <ul>{binding from:clients item_presenter:client_item_presenter}</ul>
+        <a href="#" data-binded-click="{binding command:add_client}">Ajouter un client</a>
+        
+  
+  </body>
+</html>

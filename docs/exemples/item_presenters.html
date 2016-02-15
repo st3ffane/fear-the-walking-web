@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <title>Fear the walking web! Demos</title>
+
+	<script src="../../fear-the-walking-web-flesh-and-bones.js"></script>
+	<script>
+        function Client (n,p,s){
+                this.nom = n;
+                this.prenom = p;
+                this.sexe=s;
+        };
+        myContext = {  
+                clients : [ new Client("PONTEINS","Stéphane","M"),new Client("MALLOW","Marc","M"), new Client("DALTON","M’a","F")],
+                simple : [1,2,"Bonjour",3.34, undefined],
+
+        };
+        
+  </script>
+  </head>
+  <body data-context="myContext">
+        <div data-role="presenters">
+		<!-- le presenter pour afficher les données du tableau -->
+		<div id="client_item_presenter" data-role="presenter">
+                <!--ici, on n’utilise pas un div mais un LI puisqu’on veut afficher dans un UL-->
+
+			<li>
+				<span>Nom: {binding from:nom}</span>&nbsp;
+				<span>Prénom: {binding from:prenom}</span>
+			</li>
+                </div>
+                <div id="simple_item_presenter" data-role="presenter">
+                        <li>
+                                <span>{binding from:$this}</span>
+                        </li>
+                        <li data-type="Number">
+                                <span>{binding from:$this} années</span>
+                                
+                        </li>
+                        <li data-type="fallback">
+                                ???? 
+                        </li>
+                </div>
+        </div>
+        <h3>Une simple liste de clients:</h3>
+        <ul>{binding from:clients item_presenter:client_item_presenter}</ul>
+        <h3>Une liste de valeurs primitives:</h3>
+        <ul>{binding from:simple item_presenter:simple_item_presenter}</ul>
+
+  
+  </body>
+</html>
