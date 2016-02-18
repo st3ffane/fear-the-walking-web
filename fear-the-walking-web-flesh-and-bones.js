@@ -9,6 +9,27 @@
 
   Fear the walking web - Flesh & Bones
 
+  
+  version 0.4:
+        - bug WoWs et EDGE!!!  SVG ne possede pas d'attribut Children... 
+        - definition méthodes par prototype  => permet d'eviter la cr&ation de closures inutiles
+        
+ baz.Bar = function() {
+   // constructor body
+ };
+
+ baz.Bar.prototype.foo = function() {
+   // method body
+ }; 
+ 
+        - verifier les closures....
+        
+        
+        - objet binding-infos et eviter les copies
+        - binding ds HTMLElemeent?
+        - from_url et url_params
+        - ameliorer XPATH
+        - doc.fragment
 
 TODO: requete XPAth pour eviter d'englober les données dans une page
     ameliorer la gestion tableau
@@ -50,18 +71,15 @@ function getDomPath(elem, root) {
 		return;
 	}
 
-//("getdompath")
-//(elem)
-//(root)
 
-  var stack = [];
+          var stack = [];
 
-  while (el != root && el.parentNode != null) {
-    //si a un id, utilise le
+          while (el != root && el.parentNode != null) {
+            //si a un id, utilise le
 
-	if ( el.hasAttribute('id') && el.id != '' ) {
-      stack.unshift(el.nodeName.toLowerCase() + '#' + el.id);
-    } else {
+                if ( el.hasAttribute('id') && el.id != '' ) {
+              stack.unshift(el.nodeName.toLowerCase() + '#' + el.id);
+            } else {
 		////("searching sibling");
 		var sibCount = 0;//nbr de siblings (de meme nom de tag)
 		var sibIndex = 0;//index de l'element parmis les siblings
@@ -93,6 +111,7 @@ function getDomPath(elem, root) {
 }
 
 
+//une méthode converter pour les radiois values
 function check_radio_value(value, params){
         return value ? value == params : null;
 }
@@ -940,11 +959,26 @@ function __model_binding(infos){
             
             if (model == null){
                 //celui par defaut
-                //("Model par defaut "+p_type);
+                console.log("Model par defaut "+p_type);
+                console.log(root_model)
+                console.log(MODELS)
                 item_type = "defaut";
                 //(MODELS)
                 bindings = MODELS[p_type] ;
-                model = root_model.children[0];
+                
+                children = root_model.children;
+                if (children == null){
+                        children = [];
+                        childs = root_model.childNodes;
+                        end = childs.length;
+                        for (i= 0; i< end; i++){
+                              if (childs[i].nodeType != 8 && (childs[i].nodeType != 3 || /\S/.test(childs[i].nodeValue))){
+                                      children.push( childs[i] );
+                                      break;
+                              }
+                        }
+                }
+                model = children[0];
             }
             //("Creation d'un nouveau model "+p_type);
 
@@ -1404,13 +1438,27 @@ function __array_binding(infos){
         //si a anotter le binding en text
         if (this._element.textContent != undefined) this._element.textContent = "";
         //ici, travaille sur tout le tableau
-        removeChilds = this._element.children;//par defaut, supprime tous les childs de la liste
-
+        var removeChilds = this._element.children;//par defaut, supprime tous les childs de la liste
+        if (removeChilds == null){
+                        removeChilds = [];
+                        childs = this._element.childNodes;
+                        end = childs.length;
+                        for (i= 0; i< end; i++){
+                              if (childs[i].nodeType != 8 && (childs[i].nodeType != 3 || /\S/.test(childs[i].nodeValue))){
+                                      children.push( childs[i] );
+                                      
+                              }
+                        }
+                }
+       
 //(this._element.childs)
         //nettoie les elements html inutiles si besoin
-        for(ci=removeChilds.length-1;ci>=0;ci--){
-            this._clean_child(removeChilds[ci]);
-        }
+        
+                for(ci=removeChilds.length-1;ci>=0;ci--){
+                    this._clean_child(removeChilds[ci]);
+                
+                }
+        
 
         add_childs = value;
         //ajoute les nouveaux elements
@@ -2304,18 +2352,40 @@ function AppInit(){
             var model = models[moi];
 
             id = model.getAttribute("id");
+//probleme EDGE et SVG: pas de children pour le SVG...
+            if (id == null || (model.children==null && model.childNodes == null)) continue; //n'autorise pas de models sans id!
+console.log("OK");
 
-            if (id == null) continue; //n'autorise pas de models sans id!
-//("Etude pour model id:"+id);
+        //SI EDGE ET SVG, DOIT PASSER PAR ChildNodes????
+                children = model.children;
+                if (children==null){
+                        //fait avec childnodes
+                        children = [];
+                        
+                        end = model.childNodes.length ;
+                        current = 0;
+                        cn = model.childNodes;
+                        do{
+                                node = cn[current];
+                                if (node.nodeType != 8 && (node.nodeType!=3 || /\S/.test(node.nodeValue))){
+                                       
+                                        children.push(node);;
+                                }
+                                //ajoute
+                                
+                                current++;
+                        }while(current<end);
+                }
+        
 			//ici, si plusieurs childs, veut dire plusieurs data-type
-            if (model.children.length == 1){
+            if (children.length == 1){
                 //cree les bindings pour ce model
                 //("RECUP MODEL BINDINGS POUR: "+id);
-                MODELS[id] = __get_bindings(model.children[0], false);//false: ne met pas en place les events handlers
+                MODELS[id] = __get_bindings(children[0], false);//false: ne met pas en place les events handlers
             } else {
                 //utilise des data-types, doit creer un binding par data-type
-                for (c_i = 0; c_i < model.children.length; c_i++){
-                    mdl = model.children[c_i];
+                for (c_i = 0; c_i < children.length; c_i++){
+                    mdl = children[c_i];
                     dtype = mdl.getAttribute("data-type");
                     //("RECUP MODEL BINDINGS POUR: "+id + "type: "+dtype);
                     if (dtype == null){
