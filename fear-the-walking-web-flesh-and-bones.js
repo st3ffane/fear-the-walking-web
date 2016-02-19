@@ -115,10 +115,16 @@ function getDomPath(elem, root) {
 function check_radio_value(value, params){
         return value ? value == params : null;
 }
-//surcharge qqs methodes de array pour etr prevenu des push, slice...
-DBArray = {};
 
-DBArray.__proto__ = new Array();
+
+
+
+
+
+//surcharge qqs methodes de array pour etr prevenu des push, slice...
+var DBArray = Object.create(Array);
+
+//DBArray.__proto__ = new Array();
 DBArray.push = function(){
 
     //ajoute a l'array
@@ -192,7 +198,6 @@ DBArray.unshift = function(){
     return p;//la nouvelle longueur du tableau
 };
 //overribe bracket setter? voir avec les proxies
-
 DBArray.set = function (obj, index){
     //modifie l'item a l'index
     //NOTE: on pourrai creer des property pour chaque element de l'array
@@ -210,6 +215,9 @@ DBArray.set = function (obj, index){
         }
     }
 }
+
+
+
 
 
 Object._defineProperty = Object.defineProperty;
@@ -344,6 +352,10 @@ defineBindObject = function(obj){
 
 
 }
+
+
+
+
 //definie une property pour un objet a lier
 //INTERNAL
 //@param obj: l'instance de l'objet a lier
@@ -403,6 +415,9 @@ function clear_events (child){
 				events = child.eventListenerList[key];
 				for(j=0;j<events.length; j++){
 					child.removeEventListener(key,events[j] );
+                                        
+                                        if(child._input_binding)child._input_binding=null;
+                                        if(child._cmd_binding)child._cmd_binding=null;
 				}
 			}
 	}
@@ -426,28 +441,62 @@ var __regex__ = new RegExp(/(?: ([\w_\-]+):([\$\w,\._;%\-\$]+|(?:'[\w\s,\._;%\-]
 le nouvelle valeur
 */
 function __prop_binding(infos){
-
-	this._path = infos.path; 			//getDomPath(this._element, infos.root);
+    if (infos == null) return;
+//initialisations pas glop, serait mieux si init a vide...
+    this._path = infos.path; 			//getDomPath(this._element, infos.root);
     this.to=infos.to;					//nom de la property a binder, par defaut setValue?
     this.from = infos.from;				//nom de la datas (ou path) a binder
     this.mode = infos.mode;				//choix one_way, 2 way si input?
     this.converter = infos.converter;	//pour convertir les donn�es en ce qu'on veut
     this._converter_params = null;		//parametres pour le converter
     this._fallback = null;				//quoi afficher par defaut
+    
+    this.converter_params = infos.converter_params;		//des parametres optionnels pour le converter TODO
+    this.fallback = infos.fallback;						//si la valeur est null (ou invalide?), ce qui doit etre afficher
+
+
+
 	this.alt = infos.alt;				//liaison a d'autres property
-	this._infos = infos;				//sauvegarde au cas ou
     this.root = infos.root;				//l'element root du binding
     this._element = infos._element;		//element html a binder (peut se trouver dans un model!!!)
 
     this._key_uuid_ = null;				//je m'en sert encore de ca???
 
-	//Recupere le nom de toutes les property a sureiller pour la mise
-	//a jour de ce binding
-	//@param infos: les informations de binding
-	//@return array: les noms de property a surveiller (from, alts et converter_params)
-    this.getBindingKeys = function(infos){
+	
+}
+__prop_binding.prototype = {
+        get converter_params(){return this._converter_params;},
+        set converter_params(value){
+                if (value==null) this._converter_params = null;
+            //split la chaine en un tableau de parametres
+            else if (value[0]=='[' && value[value.length-1]==']'){
+                //un tableau de parametres
+                value = value.substring(1, value.length-1);
+                this._converter_params = [];
+                vs = value.split(",");
+                for (vp=0;vp<vs.length;vp++){
+                    p=vs[vp];
+                    this._converter_params.push(__unstringify(p));
+                }
+            }
 
-        infos = infos || this._infos;
+            else {
+            //un seul parametre...
+              this._converter_params = __unstringify(value);
+            }
+        },
+        
+        get fallback(){return this._fallback;},
+        set fallback(value){this._fallback = __unstringify(value);}
+};
+
+//Recupere le nom de toutes les property a sureiller pour la mise
+//a jour de ce binding
+//@param infos: les informations de binding
+//@return array: les noms de property a surveiller (from, alts et converter_params)
+__prop_binding.prototype.getBindingKeys = function(infos){
+
+        infos = infos || this;
         //gestion du 'alt' ------------------------------------------------
         keys = infos.alt;
         if(keys) keys = keys.split(',');
@@ -471,11 +520,11 @@ function __prop_binding(infos){
         return keys;
     }
 
-	//met a jour le contenu du binding
-	//@param value: la valeur a afficher (peut etre null)
-	//@param context: le context de données courant
-	//@param extra: des parametres en plus (non utilisé pour l'instant)
-    this.populate = function(value, context, extra){
+//met a jour le contenu du binding
+//@param value: la valeur a afficher (peut etre null)
+//@param context: le context de données courant
+//@param extra: des parametres en plus (non utilisé pour l'instant)
+__prop_binding.prototype.populate = function(value, context, extra){
 
 		if(value == null) value = this.fallback;
 		value = this.convert_value (value, context);
@@ -485,46 +534,13 @@ function __prop_binding(infos){
 
     }
 
-    Object.defineProperty(this, "converter_params",{
-        set: function(value){
-
-            if (value==null) this._converter_params = null;
-            //split la chaine en un tableau de parametres
-            else if (value[0]=='[' && value[value.length-1]==']'){
-                //un tableau de parametres
-                value = value.substring(1, value.length-1);
-                this._converter_params = [];
-                vs = value.split(",");
-                for (vp=0;vp<vs.length;vp++){
-                    p=vs[vp];
-                    this._converter_params.push(__unstringify(p));
-                }
-            }
-
-            else {
-            //un seul parametre...
-              this._converter_params = __unstringify(value);
-            }
-        },
-        get:function(){return this._converter_params;}
-    });
-    Object.defineProperty(this, "fallback",{
-        set: function(value){
-            //verifie si a des '' devant???
-            this._fallback = __unstringify(value);
-        },
-        get:function(){return this._fallback;}
-    });
-
-    this.converter_params = infos.converter_params;		//des parametres optionnels pour le converter TODO
-    this.fallback = infos.fallback;						//si la valeur est null (ou invalide?), ce qui doit etre afficher
-
-	//convertie la valeur passée au populate en fonction du converter et de ses
-	//parametres
-	//@param value: la valeur a convertir
-	//@param context: le context de données courant
-	//@param return: la valeur convertie
-	this.convert_value=function(value, context){
+ 
+//convertie la valeur passée au populate en fonction du converter et de ses
+//parametres
+//@param value: la valeur a convertir
+//@param context: le context de données courant
+//@param return: la valeur convertie
+__prop_binding.prototype.convert_value=function(value, context){
         //au cas ou des params commencant par $
         
         if (this.converter!=null)
@@ -574,8 +590,8 @@ function __prop_binding(infos){
         return value;
     }
 
-	//@deprecated
-	this.clone = function(root){
+//@deprecated
+__prop_binding.prototype.clone = function(root){
 		//cree un nouveau binding li� au root element
 		infos = {};
 		for(k in this._infos){
@@ -593,17 +609,25 @@ function __prop_binding(infos){
 
 	}
 
-}
 
-
+        
+        
+        
+        
+        
 /* un binding sur une zone de texte (en general, entre 2 balises)*/
-function __textContent_binding(infos){
+function __textContent_binding(infos){    
+    
     __prop_binding.call(this, infos);
     this._index = infos._index;		//index dans la chaine argument ou se trouve le binding
     this._length = infos._length;	//taille de la donn�e du binding (en char)
 
 
-    this.populate = function(value, context, extra){
+    
+}
+
+__textContent_binding.prototype = new __prop_binding( );
+__textContent_binding.prototype.populate = function(value, context, extra){
 
 
         if(value == null) value = this.fallback;
@@ -626,8 +650,6 @@ function __textContent_binding(infos){
         this._element.textContent = start + value + end ;
         this._key_uuid_ = context.__uuid__+":"+this.from;
     }
-}
-
 /*binding d'un attribute HTML (ex: class)*/
 function __attr_binding(infos){
 
@@ -636,7 +658,10 @@ function __attr_binding(infos){
 
     this._index = infos._index;		//index dans la chaine argument ou se trouve le binding
     this._length = infos._length;	//taille de la donn�e du binding (en char)
-    this.populate = function(value, context, extra){
+    
+}
+__attr_binding.prototype = new __prop_binding(  );
+__attr_binding.prototype.populate = function(value, context, extra){
 
         //pas une property de l'element (ex: class), modifie le html
         if(value == null) value = this.fallback;
@@ -654,30 +679,38 @@ function __attr_binding(infos){
         this._element.setAttribute(this.to,start + value + end );
         this._key_uuid_ = context.__uuid__+":"+this.from;
     }
-}
 
-/*bind un objet*/
+    
+    
+    
+    
+    
+    /*bind un objet*/
 function __model_binding(infos){
+        
+    if (infos == null) return;
+    
+    
     __prop_binding.call(this, infos);
     this.presenter = infos.presenter;	//le code html pour l'affichage des donn�es de l'objet
-	this.merge = infos.merge;			//@deprecated compliqué a expliquer pour une utilisation tres reduite (voir exemple SVG)
-
+    this.merge = infos.merge;			//@deprecated compliqué a expliquer pour une utilisation tres reduite (voir exemple SVG)
+    this.deep = infos.deep;   //binde les proprietes de l'objet??
 
     this._stack = {};					//pour eviter de recreer des trucs a chaque fois...
     
-    
-    
-	//ajoute un element au stack pour pouvoir reutiliser plus tard
+}
+__model_binding.prototype = new __prop_binding();
+//ajoute un element au stack pour pouvoir reutiliser plus tard
 	//@param type: le type de donnée (nom de la fonction constructeur)
 	//@param stack: l'element html a ajouter au stack
-    this._stack_push=function(type, stack){
+    __model_binding.prototype._stack_push=function(type, stack){
         if (this._stack[type] == null) this._stack[type]=[];
         this._stack[type].push(stack);
     };
 
 	//recupere un element du stack pour reutilisation
 	//@param type: le type d'element a recuperer (nom de la fonction constructeur)
-    this._stack_obtain=function(context, type){
+    __model_binding.prototype._stack_obtain=function(context, type){
         //verifie toute le chaine de prototype
         //(context);
         //(type)
@@ -712,7 +745,7 @@ function __model_binding(infos){
 	Nettoie le html crée lors d'un precedent binding
 	recupere tout et met dans un stack pour reutilisation
 	*/
-    this._clean = function(root){
+    __model_binding.prototype._clean = function(root){
         stack = {html:null, bindings:[]};
         old_type = 'Object';
 
@@ -772,7 +805,7 @@ function __model_binding(infos){
     }
 
 	//gestion du cas value==null
-    this._process_fallback = function(){
+    __model_binding.prototype._process_fallback = function(){
         //si value = null, affiche et bind le fallback
         if (this.fallback == null) {
             //regarde si a un datatype=fallback
@@ -820,7 +853,7 @@ function __model_binding(infos){
     //@param mroot: element HTML root du presenter (par defaut, recupere this.presenter)
     //@param type: string type de la donnée (par defaut: context.constructor.name)
     //@param deep: si doit binder les données du context (par defaut iinfos.deep)
-    this._populate_model = function(context, mroot,type, deep){
+    __model_binding.prototype._populate_model = function(context, mroot,type, deep){
         //MODIF 0.2b: bind l'objet (prototype) si necessaire
         
         
@@ -839,7 +872,7 @@ function __model_binding(infos){
         //verifie si existe un stack, si oui, recupere
         var frag =null;
         var current_keys = [];//les clés crées pour ce model
-        var deep_binding = deep || this._infos.deep || true;//pour savoir si rend accessible les données internes au binding
+        var deep_binding = deep || this.deep || true;//pour savoir si rend accessible les données internes au binding
 
         //si fallback, on a un probleme ici...
         //considere que le type est Object... pas fallback
@@ -848,7 +881,7 @@ function __model_binding(infos){
         
         if (old_stack != null){
             //initialise a partir de ce qui est deja crée
-            console.log("Recupere du stack....");
+            //("Recupere du stack....");
             //les bindings....
 
             var model_bindings = old_stack.bindings;
@@ -859,7 +892,7 @@ function __model_binding(infos){
             for (var mbi=0;mbi<model_bindings.length;mbi++){
                 var mbd = model_bindings[mbi];
                 if(mbd.init != null) mbd.init(context);
-                console.log(mbd);
+                //(mbd);
 
                 //inscription des clés d'events: uniquement si demandé, ou par defaut?
                 if (deep_binding){
@@ -959,9 +992,9 @@ function __model_binding(infos){
             
             if (model == null){
                 //celui par defaut
-                console.log("Model par defaut "+p_type);
-                console.log(root_model)
-                console.log(MODELS)
+                //("Model par defaut "+p_type);
+                //(root_model)
+                //(MODELS)
                 item_type = "defaut";
                 //(MODELS)
                 bindings = MODELS[p_type] ;
@@ -1085,7 +1118,7 @@ function __model_binding(infos){
         //doit retourner le fragment ET les clés créees...
         return frag;
     }
-    this.populate = function(context, parent, extra){
+    __model_binding.prototype.populate = function(context, parent, extra){
 	    //casse la methode pour arraymodel
 		//nettoie si a deja qqchose
 		//tout retirer d'un coup?
@@ -1116,7 +1149,7 @@ function __model_binding(infos){
 
         this._key_uuid_ = context.__uuid__+":"+this.from;
     }
-}
+
 
 
 /*binding d'un array*/
@@ -1129,17 +1162,18 @@ function __array_binding(infos){
 
 	this.merge = infos.merge;
 	//sql like
-	this.order_by = infos.order_by; 		//un nom de variables pour ordonner la liste
+	/*this.order_by = infos.order_by; 		//un nom de variables pour ordonner la liste
 	this.group_by = infos.group_by;			//nom de variable pour grouper les items NON SUPPORTE POUR L'INSTANT!
 	this.select_if = infos.select_if;		//nom de methode true/false pour selectionner un item
 
 	this.ascending = infos.ascending;		//boolean ordre ascendant/decscendant
-	this._current_keys = null;				//cl� de binding cr�es dans la page...
+	this._current_keys = null;				//cl� de binding cr�es dans la page... */
 
-    //this._view = {};//la vues precedentes
-
-	//@deprecated
-	this._clear_binding = function(bindings){
+   
+}
+__array_binding.prototype = new __model_binding ();
+//@deprecated
+	__array_binding.prototype._clear_binding = function(bindings){
 		//nettoie le binding
 		for(key in bindings){
 
@@ -1153,7 +1187,7 @@ function __array_binding(infos){
 	Nettoie le html crée lors d'un precedent binding
 	recupere tout et met dans un stack pour reutilisation
 	*/
-    this._clean_child = function(child){
+    __array_binding.prototype._clean_child = function(child){
 
         stack = {html:null, bindings:[]};
         old_type = 'Object';
@@ -1211,7 +1245,7 @@ function __array_binding(infos){
 
 
     }
-    this.populate = function (value, context, extra){
+    __array_binding.prototype.populate = function (value, context, extra){
 
         //definie les actions par defaut (ie: pas d'extras)
 
@@ -1220,7 +1254,7 @@ function __array_binding(infos){
         value = this.convert_value (value, context);
 
         if (value == null){
-                console.log("value is null!");
+                //("value is null!");
                 this._empty = true; //marque empty
                 
             //si a des childs, supprime les tous
@@ -1228,9 +1262,9 @@ function __array_binding(infos){
                 this._element.removeChild(this._element.firstChild);
             }
             
-            console.log("a fallback?"+this.fallback);
+            //("a fallback?"+this.fallback);
             if (this.fallback) {
-                    console.log("fallback");
+                    //("fallback");
                 //this._element[this.to] = " unknown model! ";//pas de model, ne fait rien
                  /*msg = document.createElement("h1");
                 msg.appendChild(document.createTextNode("Unknown model!!!"));
@@ -1255,12 +1289,12 @@ function __array_binding(infos){
 
             } else {
                 
-                console.log("hello");
+                //("hello");
                 
             }
             return;
         }
-        console.log("value exist!");
+        //("value exist!");
         if (value.length == 0){
                   this._empty = true; //marque empty
                 
@@ -1581,7 +1615,7 @@ function __array_binding(infos){
 
 
     };
-    this._populate_item = function(context, parent, extra){
+    __array_binding.prototype._populate_item = function(context, parent, extra){
 	    //casse la methode pour arraymodel
 		//nettoie si a deja qqchose
 		//tout retirer d'un coup?
@@ -1614,28 +1648,6 @@ function __array_binding(infos){
         return child;
     
     }
-	//affiche le contenu d'un tableau
-	//@param arr: le tableau a afficher
-	//@param parent: l'element html a qui ajouter les items de la liste
-	/*this.__populate_group = function(arr, parent){
-
-
-        for (item_i = 0; item_i<arr.length; item_i++){
-            //(arr);
-
-			item = arr[item_i];
-
-            //model binding simple????
-            result = this._populate_model(item);
-            result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
-
-            parent.appendChild(result);
-
-
-        }
-
-	};*/
-}
 
 //utilitaire: permet de trier les elements d'une liste
 //@param arr: le tableau dans lequel mettre l'element
@@ -1657,6 +1669,9 @@ function __array_insert_order (arr, item, o_b){
 }
 
 
+
+
+
 /*binding d'une commande*/
 function __command_binding(infos){
 
@@ -1667,33 +1682,15 @@ function __command_binding(infos){
     this.context = null;
     this.command = infos.command; 	//la methode du context de données global a executer
     this._cmd_parameters = null;    //des parametres pour la methode
-	Object.defineProperty(this, "command_params",{
-        set: function(value){
-            if (value==null) this._cmd_parameters = null;
-            //split la chaine en un tableau de parametres
-            else if (value[0]=='[' && value[value.length-1]==']'){
-                //un tableau de parametres
-                value = value.substring(1, value.length-2);
-                this._cmd_parameters = [];
-                for (p of value.split(',')){
-                    this._cmd_parameters.push(p);
-                }
-            }
-
-            else {
-              this._cmd_parameters = [value];
-            }
-        },
-        get:function(){return this._cmd_parameters;}
-    });
-	this.command_params =  infos.command_params;
+	
+    this.command_params =  infos.command_params;
 
 
 
     var bind = this;
 
 	//gestion de l'event pour la commande
-    this.__process_event =  function(evt){
+    /*this.__process_event =  function(evt){
 
         if (bind.context == null) return;
         //recupere le nom de la methode
@@ -1720,58 +1717,120 @@ function __command_binding(infos){
         }
         CONTEXT[value](evt,params);
 
-    }
+    }*/
 
-	//initialise la commande
+	
+}
+//le prototype...
+cb_pr = {
+        get command_params(){return this._cmd_parameters;},
+        set command_params(value){
+                if (value==null) this._cmd_parameters = null;
+            //split la chaine en un tableau de parametres
+            else if (value[0]=='[' && value[value.length-1]==']'){
+                //un tableau de parametres
+                value = value.substring(1, value.length-2);
+                this._cmd_parameters = [];
+                for (p of value.split(',')){
+                    this._cmd_parameters.push(p);
+                }
+            }
+
+            else {
+              this._cmd_parameters = [value];
+            }
+        }
+};
+cb_pr.__proto__ = new __prop_binding(  );
+__command_binding.prototype =cb_pr;
+//initialise la commande
 	//@param ctx: le context de donnée
-    this.init = function(ctx){
+    __command_binding.prototype.init = function(ctx){
         this.context=ctx;
         if (this.command != null && this.to!=null){
                 
-                //(this._infos.path);
+
             this._element.addEventListener(this.to,this.__process_event);
+            this._element._cmd_binding = this;                                                                                  // memory leaks??????
         }
     };
-    this.populate = function (value, context, extra){
+    __command_binding.prototype.populate = function (value, context, extra){
         this.init(context);
     };
 
+__command_binding.prototype.__process_event = function(evt){
+        //comment recuperer les binding ici.....
+        
+        bind = this._cmd_binding;
+        
+        if (bind == null || bind.context == null) return;
+        
+        
+        //recupere le nom de la methode
+        value = bind.command;
+        if(value == null) value = bind.fallback;
+        value = bind.convert_value (value, bind.context);
+        params = null;
+        //appel a la methode, passe les données
+        if (bind.command_params!=null){
+            params=[];
 
+
+            for (cpi=0;cpi<bind.command_params.length;cpi++){
+                if (bind.command_params[cpi][0]=="$"){
+                    //recupere le nom de la prop
+                    prop = bind.command_params[cpi].substr(1);
+
+                    if (prop in bind.context) params.push(bind.context[prop]);//par valeur
+                    else params.push('null');
+                }
+                else params.push(bind.command_params[cpi]);
+            }
+
+        }
+        CONTEXT[value](evt,params);
+
+    
 }
-
+    
+    
+    
+    
+    
 /*binding d'un element de formulaire (input?)*/
 function __input_binding(infos){
 	__prop_binding.call(this, infos);
 	this._pass = false;					//pour firefox mobile!
+        this.return_value = infos.return_value;                 //force a retourner la propriete "value" de l'input
         
         
-        
-       
-        this.init = function(context){
+       	this._event =infos.event == null ? 'change' : infos.event;//qd envoyer les infos de changement
+	//par defaut, sur le lost focus/enter ?
+	
+        //dans le cas ou le binding se trouve dans la page directement, lie le context global
+        if (infos.process_event){
+                //("EVENT en PLACE");
+                //forcement le context global
+                this.init(CONTEXT);
+        }
+}
+__input_binding.prototype=new __prop_binding( );
+
+__input_binding.prototype.init = function(context){
                 this._element.addEventListener(this._event, this.on_process_event);
                 this.context = context;//enregistre le context de donn�es pour plus tard....
 		//penser a nettoyer ca plus tard...
+                this._element._input_binding = this;
         }
-	//met a jour la donnée javascript
-	//@param value: la valeur entrée par l'utilisateur
-	this.mirror = function(value){
-		this._pass = true;
-		ctx = this.context == null ? CONTEXT : this.context;
-                ctx[this.from] = value;
-		this._pass=false;
-    }
-	this._event =infos.event == null ? 'change' : infos.event;//qd envoyer les infos de changement
-	//par defaut, sur le lost focus/enter ?
-	//possible input
-        
-	//met en place l'event de mise a jour?
-	var bind=this;
-	this.on_process_event = function(evt){
+__input_binding.prototype.on_process_event = function(evt){
 
 		//par exemple, check box doit renvoyer checked, pas value!!!
                 //value = this.valueAsChecked ?  this.value : this.valueAsChecked;
+                bind = this._input_binding;
+                if(bind == null || bind.context == null) return;
                 
-		value = bind._infos["return_value"] === true ? this.value : this[bind.to];
+                
+		value = bind.return_value === true ? this.value : this[bind.to];
                 //("on process event: "+value);
                 if(value == null || value == undefined || value=="") {
                     this.placeholder = bind.fallback;
@@ -1856,18 +1915,21 @@ function __input_binding(infos){
                         }
 		}
 	};
-	//probleme, si dans un model, ne bind pas l'element cr�e
-	//mais si pas de parent, DOIT ajuter l'event handler!!!
-	/*if(d_b.process_event == true){
-		this._element.addEventListener(this._event, this.on_process_event);
-	}*/
+//met a jour la donnée javascript
+//@param value: la valeur entrée par l'utilisateur
+__input_binding.prototype.mirror = function(value){
+		this._pass = true;
+		ctx = this.context == null ? CONTEXT : this.context;
+                ctx[this.from] = value;
+		this._pass=false;
+    }
 
-	//@deprecated
-	this.clean = function(){
+//@deprecated
+__input_binding.prototype.clean = function(){
 		//supprime l'event listener
 		infos._element.removeEventListener(this._event, this.on_process_event);
 	}
-	this.populate = function(value, context, extra){
+__input_binding.prototype.populate = function(value, context, extra){
                 
                 //doit mettre en place les events
                 //si pas deja en place!!!!!
@@ -1888,7 +1950,7 @@ function __input_binding(infos){
 
         //une property de l'element, modifie directement et completement
         //probleme, peut demander a utiliser un model! ---------------------------------> TODO
-        console.log("TEST VALUE: "+value);
+        //("TEST VALUE: "+value);
         
 
 		value = this.convert_value (value, context);
@@ -1904,17 +1966,11 @@ function __input_binding(infos){
 		this._element[this.to] = value;
     }
 
-        //dans le cas ou le binding se trouve dans la page directement, lie le context global
-        if (infos.process_event){
-                //("EVENT en PLACE");
-                //forcement le context global
-                this.init(CONTEXT);
-        }
-}
 
 
-
-
+    
+    
+    
 /**permet de mettre a jour l'ui lorsqque les datas ont chang�es
 @param key: le nom de la property qui a chang�e ou null pour mettre a jour toute la page
 @args: parametres optinnels ou particulier a un type de binding*/
@@ -1978,6 +2034,12 @@ function __notifyDatasetChanged(context,bindings, key, extra){
 
     }
 }
+
+
+
+
+
+
 
 //recupere les informations de bindings de la page
 //@param root: elment dans lequel chercher les bindings
@@ -2150,7 +2212,7 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
 
 		//cree le binding et populate (par regex)
 
-		d_b = {};//un objet vide
+		d_b = [];//un tableau vide
 
 		//si process event, recupere l'element, sinon, get path
                 
@@ -2354,7 +2416,7 @@ function AppInit(){
             id = model.getAttribute("id");
 //probleme EDGE et SVG: pas de children pour le SVG...
             if (id == null || (model.children==null && model.childNodes == null)) continue; //n'autorise pas de models sans id!
-console.log("OK");
+//("OK");
 
         //SI EDGE ET SVG, DOIT PASSER PAR ChildNodes????
                 children = model.children;
