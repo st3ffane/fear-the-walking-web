@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <title>Test Webservice direct binding</title>
+	<script src="../../fear-the-walking-web-flesh-and-bones.js"></script>
+	<script>
+        context = {search_txt : "app", count: 5};        
+        </script>
+</head>
+<body data-context="context" >
+        <div data-role="presenters">
+                <div data-role="presenter" id="suggestion_query_result">
+                        <div>
+                                <b>Nombre de reponses:{binding from:count fallback:'0'}</b>
+                                <ul>{binding from:data item_presenter:suggestions_result}</ul>
+                        </div>
+                        <div data-type="WEBSERVICE_LOADING">
+                                <i>{binding from:message fallback:'Merci de patienter'}</i>
+                        </div>
+                        <div data-type="WEBSERVICE_ERROR">
+                                <i>Erreur de chargement des données du webservice:</i>
+                                <b>{binding from:message}</b>
+                        </div>
+                        <div data-type="WEBSERVICE_TIMEOUT">
+                                <b>{binding from:message}</b>
+                        </div>
+                </div>
+                <div data-role="presenter" id="suggestions_result">
+                        <li>
+                                <i>{binding from:FriendlyName}</i>
+                        </li>
+                </div>
+        </div>
+        
+        
+        <div>
+        
+        <h3>Juste un test pour la recuperation et binding direct d'un service web renvoyant un resultat sous forme de String JSON.</h3>
+        <form>
+                <h4>Entrez le debut du nom de l'action recherchée, puis clicquez n'importe ou sur la page.</h4>
+                <input type="text" data-binded-value="{binding from:search_txt mode:2way fallback:'Votre recherche ici'}"></input>
+                <h4>Nombre de résultats:</h4>
+                <label for="c3">3</label><input id="c3" name="count" type="radio" data-binded-checked="{binding from:count mode:2way}" value="3">
+                <label for="c3">5</label><input id="c3" name="count" type="radio" data-binded-checked="{binding from:count mode:2way}" value="5">
+                <label for="c3">8</label><input id="c3" name="count" type="radio" data-binded-checked="{binding from:count mode:2way}" value="8">
+        
+        </form>
+        <div>{binding from:http://finance.services.appex.bing.com/Market.svc/MTAutocomplete?q=$search_txt&locale=FR-FR&count=$count as:suggestions presenter:suggestion_query_result}</div>
+        </div>
+</body>
+</html>

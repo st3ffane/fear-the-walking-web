@@ -38,7 +38,7 @@ TODO: requete XPAth pour eviter d'englober les données dans une page
 */
 
 var CONTEXT = null;                //data context de l'application/page web
-var BINDINGS = {};//dictionnaire associant clé de binding a liste d'elements a prevenir
+var BINDINGS = [];//dictionnaire associant clé de binding a liste d'elements a prevenir
 var MODELS = {};				   //des binding models a ajouter/supprimer des pages
 
 
@@ -256,7 +256,7 @@ Object.defineProperty = function (cible, name, accessors){
 
 //permet de creer le necessaire pour la liaison de donnée  (ie: property et notify)
 //@param obj: le plain object javascript a rendre 'bindable'
-defineBindObject = function(obj){
+var defineBindObject = function(obj){
     if (obj == null) return;
     is_array = false;
 
@@ -286,7 +286,7 @@ defineBindObject = function(obj){
 				if (key in BINDINGS) {
 					////("OK");
                                         //("notify from setter");
-					__notifyDatasetChanged(this,BINDINGS[key], key);
+					__notifyDatasetChanged(this,BINDINGS[key], key, extra);
 				}
 	}, enumerable: false, writable:false});
 	//defini des  owners pour l'objet EXPERIMENTAL !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -431,12 +431,6 @@ function clear_events (child){
 	}
 }
 
-// GESTION BINDINGS DE DONNEES -------------------------------------------------------------------------------------------------------
-var __verif_regex__ = new RegExp(/[^\{]*(\{binding(?: [\w_-]+:['\[]?[\$'\w ,\._;%\-]+['\]]?)+\})/g);//verifie si correspond a un binding
-var __regex__ = new RegExp(/(?: ([\w_\-]+):([\$\w,\._;%\-\$]+|(?:'[\w\s,\._;%\-]+')|(?:\[[\$'\w\s,\._;%\-]+\])))/g);//recupere les infos
-
-
-
 /*le binding par defaut, remplace les donn�es de la property binder par
 le nouvelle valeur
 */
@@ -446,6 +440,10 @@ function __prop_binding(infos){
     this._path = infos.path; 			//getDomPath(this._element, infos.root);
     this.to=infos.to;					//nom de la property a binder, par defaut setValue?
     this.from = infos.from;				//nom de la datas (ou path) a binder
+    //Probleme: si URL, doit creer une nouvelle propriété dans le context pour y stocker les données....
+    
+    
+    
     this.mode = infos.mode;				//choix one_way, 2 way si input?
     this.converter = infos.converter;	//pour convertir les donn�es en ce qu'on veut
     this._converter_params = null;		//parametres pour le converter
@@ -454,13 +452,15 @@ function __prop_binding(infos){
     this.converter_params = infos.converter_params;		//des parametres optionnels pour le converter TODO
     this.fallback = infos.fallback;						//si la valeur est null (ou invalide?), ce qui doit etre afficher
 
-
+        
 
 	this.alt = infos.alt;				//liaison a d'autres property
     this.root = infos.root;				//l'element root du binding
     this._element = infos._element;		//element html a binder (peut se trouver dans un model!!!)
 
     this._key_uuid_ = null;				//je m'en sert encore de ca???
+    
+    
 
 	
 }
@@ -490,6 +490,11 @@ __prop_binding.prototype = {
         set fallback(value){this._fallback = __unstringify(value);}
 };
 
+//initialisation du binding au besoin
+__prop_binding.prototype.init = function (context){
+        //initialisation,si webservice, crée la 
+       
+}
 //Recupere le nom de toutes les property a sureiller pour la mise
 //a jour de ce binding
 //@param infos: les informations de binding
@@ -690,11 +695,12 @@ function __model_binding(infos){
         
     if (infos == null) return;
     
+    this.deep = infos.deep;   //binde les proprietes de l'objet??
     
     __prop_binding.call(this, infos);
     this.presenter = infos.presenter;	//le code html pour l'affichage des donn�es de l'objet
     this.merge = infos.merge;			//@deprecated compliqué a expliquer pour une utilisation tres reduite (voir exemple SVG)
-    this.deep = infos.deep;   //binde les proprietes de l'objet??
+    
 
     this._stack = {};					//pour eviter de recreer des trucs a chaque fois...
     
@@ -1122,6 +1128,8 @@ __model_binding.prototype = new __prop_binding();
 	    //casse la methode pour arraymodel
 		//nettoie si a deja qqchose
 		//tout retirer d'un coup?
+                
+                
         context = this.convert_value (context, parent);
         
         
@@ -1133,7 +1141,6 @@ __model_binding.prototype = new __prop_binding();
 
         //nettoie le contenu, passe dans le stack pour reutilisation possible
         //besoin de connaitre le type...
-
 
 		if (context == null ){
             //modif, utilise le fallback comme data-type
@@ -1150,8 +1157,8 @@ __model_binding.prototype = new __prop_binding();
         this._key_uuid_ = context.__uuid__+":"+this.from;
     }
 
-
-
+    
+    
 /*binding d'un array*/
 function __array_binding(infos){
     __model_binding.call(this, infos);
@@ -1187,7 +1194,7 @@ __array_binding.prototype = new __model_binding ();
 	Nettoie le html crée lors d'un precedent binding
 	recupere tout et met dans un stack pour reutilisation
 	*/
-    __array_binding.prototype._clean_child = function(child){
+    __array_binding.prototype._clean_child = function(child, root){
 
         stack = {html:null, bindings:[]};
         old_type = 'Object';
@@ -1239,7 +1246,7 @@ __array_binding.prototype = new __model_binding ();
             }
 
             //de toute facon, remove child!
-            this._element.removeChild(child);
+            root.removeChild(child);
         }
 
 
@@ -1249,8 +1256,10 @@ __array_binding.prototype = new __model_binding ();
 
         //definie les actions par defaut (ie: pas d'extras)
 
-//("POPULATE ARRAY")
+        //recupere l'element et place le dans un fragment pour eviter les reflows
 
+        //a partir de maintenant, travaille dans le fragment....
+        
         value = this.convert_value (value, context);
 
         if (value == null){
@@ -1302,7 +1311,7 @@ __array_binding.prototype = new __model_binding ();
             while (this._element.firstChild) {
                 this._element.removeChild(this._element.firstChild);
             }
-            if (this._infos.empty == null) {
+            if (this.empty == null) {
                 //this._element[this.to] = " unknown model! ";//pas de model, ne fait rien
                  /*msg = document.createElement("h1");
                 msg.appendChild(document.createTextNode("Unknown model!!!"));
@@ -1356,14 +1365,16 @@ __array_binding.prototype = new __model_binding ();
                     ci = extra.index;
 
                     //nettoie les elements html inutiles si besoin
-                    this._clean_child(this._element.children[ci]);
+                    this._clean_child(this._element.children[ci], this._element);
                     item = value[ci];
                     result = this._populate_item(item);
                     result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
 
                     
-                    prec = ci == 0 ? this._element.firstChild : this._element.children[ci-1];
+                    prec = ci == 0 ? frag.firstChild : frag.children[ci-1];
                     this._element.insertBefore(result,prec);
+                    
+                    
                     return;
 
 
@@ -1371,7 +1382,8 @@ __array_binding.prototype = new __model_binding ();
                 case 'POP':{
                     //supprime le  dernier de la listes
                     //("Hello POP!")
-                    this._clean_child(this._element.children[this._element.children.length -1]);
+                    this._clean_child(this._element.children[this._element.children.length -1], this._element);
+                    
                     return;
                 }
                 case 'PUSH':{
@@ -1392,13 +1404,14 @@ __array_binding.prototype = new __model_binding ();
 
                     this._element.appendChild(result);
                     }
-
+                       
                     return;
                 }
                 case 'SHIFT':{
                     //retire le premier element
                     //("Hello shift!")
-                    this._clean_child(this._element.children[0]);
+                    this._clean_child(this._element.children[0],this._element);
+                   
                     return;
                 }
                 case 'UNSHIFT':{
@@ -1436,7 +1449,7 @@ __array_binding.prototype = new __model_binding ();
                     //nettoie les elements html inutiles si besoin
                     for(ci=removeChilds.length-1;ci>=0;ci--){
                         
-                        this._clean_child(removeChilds[ci]);
+                        this._clean_child(removeChilds[ci],this._element);
                     }
 
                     //si doit ajouter en position...
@@ -1457,6 +1470,7 @@ __array_binding.prototype = new __model_binding ();
 
 
                     }
+
                     return;
 
                 }
@@ -1489,7 +1503,7 @@ __array_binding.prototype = new __model_binding ();
         //nettoie les elements html inutiles si besoin
         
                 for(ci=removeChilds.length-1;ci>=0;ci--){
-                    this._clean_child(removeChilds[ci]);
+                    this._clean_child(removeChilds[ci], this._element);
                 
                 }
         
@@ -1610,9 +1624,7 @@ __array_binding.prototype = new __model_binding ();
 		}
         */
 
-		//nettoie le binding
-		//this._clear_binding (bindings);
-
+	
 
     };
     __array_binding.prototype._populate_item = function(context, parent, extra){
@@ -1722,7 +1734,7 @@ function __command_binding(infos){
 	
 }
 //le prototype...
-cb_pr = {
+var cb_pr = {
         get command_params(){return this._cmd_parameters;},
         set command_params(value){
                 if (value==null) this._cmd_parameters = null;
@@ -1968,8 +1980,179 @@ __input_binding.prototype.populate = function(value, context, extra){
 
 
 
-    
-    
+var __webservice_param_regex = new RegExp(/([\w_-]+)=(\??\$\w[\w_\d]+)/g);
+function __webservice_parameter(name,value){
+        //suivant le cas....
+        this.name = name;
+        this.value = value;//le nom de la propriete
+        this.important = true;//par defaut, doit etre valide
+        
+        if (value.startsWith("$")) this.value = value.substr(1);
+        else {
+                this.value = value.substr(2);
+                this.important = false;
+        }
+}
+__webservice_parameter.prototype.getParameter = function(context){
+        value = context[this.value];
+        console.log("get parameter:"+value);
+        if (value == null){
+                console.log("NULL VALUE");
+                if( this.important) throw Error();
+                else return this.name+"=";
+        }
+        
+        return this.name+"="+encodeURI(value);
+}
+__webservice_parameter.prototype.toString = function(){return this.value;}//renvoie le  nom du parametre de binding
+
+
+
+function __webservice_url (url){
+        //recupere les infos a partir de l'URL:
+        //la cibe, les parametres
+        this._url =  url;
+        
+        this._params = [];//liste des parametres pour l'url (binding)
+        this._param_str = "";//les parametres autres de l'url (sans binding)
+        
+        //recupere la premiere position du ? pour les parametres
+        params_pos = url.indexOf("?");
+        if(params_pos != -1){
+                console.log("des parametres!!!");
+                //recupere le corps de l'URL
+                this._url = url.substr(0,params_pos);
+                param_str = url.substr(params_pos+1);//unqiement les parametres...
+                 match = __webservice_param_regex.exec(param_str);
+                    if (match){
+                        params = [];
+                        pi = 0;
+                        while (match){
+                                //recupere le nom du parametre et sa valeur: nom de la propriété
+                                //doit decouper l'URL???
+                                str = match[0];
+                                name = match[1];
+                                value = match[2];
+                                this._params.push(new __webservice_parameter(name, value));
+                                
+                                param_str = param_str.replace(str,"{"+pi+"}");
+                                pi++;
+                                //supprime de la chaine de parametres
+                                
+                                __webservice_param_regex.lastIndex = 0;//remet a zero pour leprochain coup
+                                match = __webservice_param_regex.exec(param_str);
+                        }
+                        
+                        console.log(param_str);
+                        this._param_str = param_str;
+                        
+                    } else {
+                            console.log("pas de parametres...");
+                    }
+        }
+        
+        
+            //binding vers un webservice
+            //parse l'url pour trouver les parametres si existent
+            //rajoutent a alt!
+           
+
+}
+__webservice_url.prototype.getURL = function(context){
+        //cree l'url avec les données du context
+        try{
+                url = this._url;
+                //ajoute les parametres
+                if (this._param_str.length>0){
+                        url+="?";
+                        str = this._param_str;
+                        for (upi=0;upi<this._params.length;upi++){
+                                console.log(upi+", "+this._params[upi]);
+                                v = this._params[upi].getParameter(context);
+                                str = str.replace("{"+upi+"}",v);
+                                console.log(str);
+                        }
+                        
+                        url+= str;
+                
+                }
+                console.log(url);
+                return url;
+        } catch(Error){ 
+                console.log(Error);
+                console.log("parametre obligatoire non present: annule");
+                return null;}
+};
+__webservice_url.prototype.getParametersNames = function(){
+        //renvoie la liste des parametres sous forme de string csv
+        s = this._params.join(",");
+        console.log(s);
+        return s;
+}
+
+
+
+
+function __webservice_model_binding (infos){
+        __model_binding.call(this,infos);
+        this.reader =  infos.reader;
+       if (this.from.startsWith("http://")==true || this.from.startsWith("https://")==true){
+            
+            this._url = new __webservice_url(this.from);//recupere les infos de l'URL
+            this.from = infos.as || generateUUID();//le nom de la propriete: as: si a besoin de la recuperer dans le code
+            this._prop_name = "_"+this.from;
+            
+            //comme webservice, les données ne sont pas modifiable, donc ne binde pas les proprietes de l'objet
+            //this.deep = false; on annule ca....
+            //ajoute au alt pour etre prevenu d'un changement
+            params = this._url.getParametersNames();
+            if(params){
+                if (this.alt == undefined){
+                        this.alt = params;
+                } else {
+                       this.alt += ","+params;
+                }
+            }
+   
+            
+    } 
+}
+__webservice_model_binding.prototype = new __model_binding();
+__webservice_model_binding.prototype.init = function(context){
+        if (this._url != undefined){
+                if (context[this._prop_name]==undefined){
+                        //cree la prop et le setter
+                        context[this._prop_name] = null;
+                        var prop_name = this._prop_name;
+                        
+                        Object.defineProperty(context,this.from,{
+                           get: function(){
+                                   
+                                   return this[prop_name];}
+                        });
+                }
+                
+                
+                //lance la requete AJAX... directement???
+                /*url = this._url.getURL(context);
+                if (url) __load_async_datas (url, context, this.from)*/
+        }
+}
+__webservice_model_binding.prototype.populate = function(value, context, extra){
+        //ici, populate relance la requete ajax
+        console.log("webservice populate: extra: "+extra);
+        console.log(value); //pourquoi value = undefined????
+        console.log(context);
+        if (extra){
+                //populate normal
+                __model_binding.prototype.populate.call(this, value, context);
+                
+        } else {
+                //chargement des données
+                url = this._url.getURL(context);
+                if (url) __load_async_datas (url, context, this._prop_name, this.from);
+        }
+}
     
 /**permet de mettre a jour l'ui lorsqque les datas ont chang�es
 @param key: le nom de la property qui a chang�e ou null pour mettre a jour toute la page
@@ -1979,12 +2162,15 @@ function notifyDatasetChanged(key, extra){
 	//contexte a prendre en compte////
 	if (key==null || key==''){
         //pas de process update ici, mise a jour a l'init...
+       
         for(key in BINDINGS){
-                //(key);
+               console.log(key);
             name = key.split(':')[1];//nom de la property
             bds = [];
             for (i=0;i<BINDINGS[key].length;i++){
                 b = BINDINGS[key][i];
+                console.log("search: "+name);
+                console.log("binding: "+b.from);
                 if(b.from == 'COMMANDS' || b.from == name) bds.push(b);//doit reagir
             }
             __notifyDatasetChanged(CONTEXT, bds, key);
@@ -2015,17 +2201,16 @@ function __notifyDatasetChanged(context,bindings, key, extra){
 
 		if(key=='$this' || binding.from == '$this') value = context;//a voir....
 		else{
-                        //("search binding....");
-                        //(binding.from);
+                        
 			v_key = binding.from;
-
+                        
 			if(context!= null && v_key in context){
 
 				value = context[v_key];
                                 
-                                //("notify value:"+value);
+                                
 			} else {
-                                //("Probleme...");
+                               
                                 //(context);
                                 //(context[v_key]);
                         }
@@ -2039,6 +2224,20 @@ function __notifyDatasetChanged(context,bindings, key, extra){
 
 
 
+
+// GESTION BINDINGS DE DONNEES -------------------------------------------------------------------------------------------------------
+var __verif_regex__ = new RegExp(/[^\{]*(\{binding[^\}]+\})/g);//verifie si correspond a un binding
+//var __regex__ = new RegExp(/(?:\s+([\w_\-]+):((?:\$\w[\w_\d]+)|(?:'[^']+')|(?:\[[\$']?[\$'\w\s,\._;%\-]+(?:,[\$']?[\$'\w\s,\._;%\-]+)*\])|(?:[^\s\}]+)))/g);//recupere les infos
+/*explications:
+        (?:\$\w[\w_\d]+) : une propriété du context ($ma_vvar)
+        (?:'[^']+') : une string ('bonjour! Comment ça va?'): verifier les escaped quotes
+        (?:[^\s\}]+): une string simple: from:qqchose
+        (?:'[^']+')|(?:\[[\$']?[\$'\w\s,\._;%\-]+(?:,[\$']?[\$'\w\s,\._;%\-]+)*\]) : un tableau de valeurs: ['une phrase',truc,2,$machin]
+
+*/
+var __regex__ = new RegExp(/(?:\s+([\w_\-]+):((?:https?:\/\/[^ ]+)|(?:\$\w[\w_\d]+)|(?:'[^']+')|(?:\[[\$']?[\$'\w\s,\._;%\-]+(?:,[\$']?[\$'\w\s,\._;%\-]+)*\])|(?:[^\s\}]+)))/g);//recupere les infos
+
+//TODO: finir la partie du tableau
 
 
 //recupere les informations de bindings de la page
@@ -2057,7 +2256,7 @@ function __get_bindings(root, process_event, search){
             null);
 	//me renvois tout les elements de la page?????
 	var elem = binders.iterateNext();//MODIF: passe au suivant
-    var pg_bindings = {};
+    var pg_bindings = [];
 
     //recupere les elements de la page demandant un binding de donn�es
 
@@ -2201,16 +2400,17 @@ function __get_binding_from_attributes(elem,root, process_event){
 //@param process_infos: si doit creer ou non le binding
 //@return infos: informations de bindings ou le binding lui meme
 function __parse_attribute(elem, root, nodeName, value, process_event){
-		cmds = value;
+	cmds = value;
 
         if (cmds == null || cmds == '') return null;
+        
+        //verifie qu'il y a une chance d'avoir un binding dans cet attribut/valeur
         match = __verif_regex__.exec(cmds);
-
+        
         if (match == null) return null;//pas de correspondance pour le premier        //prends en compte plusieurs matches (par exemple pour les classes,????
         //while (match != null){
 		cmds = match[1];//unqiuement les infos de bindings
-
-		//cree le binding et populate (par regex)
+                //cree le binding et populate (par regex)
 
 		d_b = [];//un tableau vide
 
@@ -2238,7 +2438,7 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
 		//recupere les commandes
 		match2 = __regex__.exec(cmds);
 		while (match2 != null){
-
+                        
 			d_b[match2[1]] = match2[2];
 			match2 = __regex__.exec(cmds);
 		}
@@ -2246,6 +2446,7 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
 
         __verif_regex__.lastIndex = 0;//remet a zero pour le prochain coup
 
+       
         if (d_b["from"] == null && d_b["command"]==null) return null;
 		d_b["process_event"] = process_event;
 
@@ -2256,14 +2457,14 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
 		if (process_event){
             //doit passer la valeur si un array?
 			bind = __create_binding_from_infos(d_b);
+                        bind.init(CONTEXT);
 		}
 
 
 
-
+        
         return bind;
 }
-
 
 //fabrique pour les bindings
 //@paam d_b: binding infos
@@ -2275,7 +2476,7 @@ function __create_binding_from_infos(d_b){
     if(d_b["presenter"] != null){
         d_b.to = "innerHTML";
         //determine si le contexte de données est une liste ou un objet simple....
-
+        if (d_b["from"].startsWith("http://")==true || d_b["from"].startsWith("https://")==true) return new __webservice_model_binding(d_b);
         return new __model_binding(d_b);
     }
     if(d_b["item_presenter"] != null){
@@ -2324,12 +2525,94 @@ function __create_binding_from_infos(d_b){
 //helper methode, retire les '' d'une propriete
 //@temp en attendant de faire mieux pour la regex
 function __unstringify(value){
+        
     if (value!=null && value[0]=="'" && value[value.length-1]=="'"){
         //un tableau de parametres
         value = value.substring(1, value.length-1);
     }
     return value;
 }
+
+
+//Recuperation des datas depuis un service web (renvoyant du JSON)
+//Les erreurs: timeout et loaderror
+
+//un waitingobj:???
+
+//l'objet AJAX lui meme 
+var xhr_timeout = 4000;//4 secondes avant annulation de la requete XHR
+function WEBSERVICE_LOADING (msg){ this.message = msg;}
+function WEBSERVICE_ERROR (err){
+        this.message=""+err;
+}
+function WEBSERVICE_TIMEOUT (err){
+        this.message = ""+err;
+}
+function __load_async_datas ( url, context, prop, key){
+          var xhr = new XMLHttpRequest();
+          console.log("loading async datas from webservice....");
+          //met en attente
+          context[prop] = new WEBSERVICE_LOADING();
+          context.notifyDatasetChanged(key,1);
+                      
+                      
+          xhr.onload = function(e){
+            console.log("get datas!!!");
+            if(xhr.status !== 200) {
+                      //erreur
+                      console.log("erreur code:"+xhr.status);
+                      context[prop] = new WEBSERVICE_ERROR(xhr.responseText);
+                      context.notifyDatasetChanged(key,1);
+                      return;
+                }
+            
+            datas = xhr.response;
+            
+            if (datas == null){
+                    context[prop] = null ;
+                    context.notifyDatasetChanged(key,1);
+                    return;
+            }
+            
+            type = xhr.getResponseHeader("content-type");
+            if (type.startsWith("application/json")){
+                    //parse le contenu JSON
+                    //quid si XML????
+                    try{                                
+                                datas = JSON.parse(datas);
+                        } catch(Error){
+                                datas  = new WEBSERVICE_ERROR("Erreur lors du parse JSON");
+                        }
+                        
+            } else if(this.reader){
+                    datas = window[this.reader](datas);
+            } 
+           //sinon, assume simple string?
+           context[prop] = datas ;
+           context.notifyDatasetChanged(key,1);
+                    
+          };
+        
+            xhr.onerror = function(err){
+                    console.log("une erreur");
+                    console.log(err);
+                context[prop] = new WEBSERVICE_ERROR(err);
+                context.notifyDatasetChanged(key,1);
+            };
+        
+          
+        xhr.timeout = xhr_timeout;
+        xhr.ontimeout = function(err){
+                context[prop] = new WEBSERVICE_TIMEOUT(err);
+                context.notifyDatasetChanged(key,1);
+        };
+            
+          
+
+          xhr.open('GET', url);
+          xhr.send();
+}
+
 
 // Intialisation des bindings dans la page ----------------------------------------------------------------------------------
 
@@ -2443,11 +2726,16 @@ function AppInit(){
             if (children.length == 1){
                 //cree les bindings pour ce model
                 //("RECUP MODEL BINDINGS POUR: "+id);
+            
                 MODELS[id] = __get_bindings(children[0], false);//false: ne met pas en place les events handlers
             } else {
                 //utilise des data-types, doit creer un binding par data-type
                 for (c_i = 0; c_i < children.length; c_i++){
                     mdl = children[c_i];
+                    
+            
+            
+            
                     dtype = mdl.getAttribute("data-type");
                     //("RECUP MODEL BINDINGS POUR: "+id + "type: "+dtype);
                     if (dtype == null){
@@ -2470,8 +2758,10 @@ function AppInit(){
     // ".//*[not(ancestor::div[@data-role='presenters']) and @*[contains(.,'{binding ')] or contains(text(),'{binding ')]"
     //*[not(@data-role='presenters')]
 	BINDINGS = __get_bindings(document.body, true, "//*[not(ancestor::div[@data-role='presenters']) and (@*[contains(.,'{binding ')] or contains(text(),'{binding ')) ]");
+        
+       
 	notifyDatasetChanged();
-//(BINDINGS);
+
     CONTEXT.end_init = true;//notifie la fin du chargement...
 }
 //lance au chargement...
