@@ -1,7 +1,7 @@
 ﻿/*
   ----------------------------------------------------------------------------
   "THE BEER-WARE LICENSE" (Revision 42):
-  <stephane.ponteins@gmail.com> wrote this file. As long as you retain this notice you
+  <steph.ponteins@gmail.com> wrote this file. As long as you retain this notice you
   can do whatever you want with this stuff. If we meet some day, and you think
   this stuff is worth it, you can buy me a beer in return.
   ----------------------------------------------------------------------------
@@ -13,27 +13,11 @@
   version 0.4:
         - bug WoWs et EDGE!!!  SVG ne possede pas d'attribut Children... 
         - definition méthodes par prototype  => permet d'eviter la cr&ation de closures inutiles
-        
- baz.Bar = function() {
-   // constructor body
- };
-
- baz.Bar.prototype.foo = function() {
-   // method body
- }; 
- 
-        - verifier les closures....
-        
-        
-        - objet binding-infos et eviter les copies
-        - binding ds HTMLElemeent?
-        - from_url et url_params
-        - ameliorer XPATH
-        - doc.fragment
-
-TODO: requete XPAth pour eviter d'englober les données dans une page
-    ameliorer la gestion tableau
-
+  version 0.5:
+        - webservice binding
+  version 1.0:
+        - optimisations
+        - memoire/fuite
 
 */
 
@@ -47,15 +31,18 @@ var MODELS = {};				   //des binding models a ajouter/supprimer des pages
 /*
 Genere un id unique pour chaque objet a lier
 */
+var __uuid_date = null;
 function generateUUID() {
-    var d = new Date().getTime();
-    var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    __uuid_date = new Date().getTime();
+    var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, __replace_uuid);
+    return uuid;
+};
+function __replace_uuid(c){
+        var d = __uuid_date;
         var r = (d + Math.random()*16)%16 | 0;
         d = Math.floor(d/16);
         return (c=='x' ? r : (r&0x3|0x8)).toString(16);
-    });
-    return uuid;
-};
+}
 
 /*
 Recupere le path vers l'element visé
@@ -66,7 +53,7 @@ Recupere le path vers l'element visé
 function getDomPath(elem, root) {
 
 	//si root = null, a partir de la racine
-	el = elem;
+	var el = elem;
 	if (!el) {
 		return;
 	}
@@ -83,7 +70,7 @@ function getDomPath(elem, root) {
 		////("searching sibling");
 		var sibCount = 0;//nbr de siblings (de meme nom de tag)
 		var sibIndex = 0;//index de l'element parmis les siblings
-		nodeName = el.nodeName;
+		var nodeName = el.nodeName;
 		for ( var i = 0; i < el.parentNode.childNodes.length; i++ ) {
 		  var sib = el.parentNode.childNodes[i];
 		  if ( sib.nodeName == nodeName ) {
@@ -129,12 +116,10 @@ DBArray.push = function(){
 
     //ajoute a l'array
     Array.prototype.push.apply(this,arguments);
-
-    //previens les owners
-    extra = {action:'PUSH', value: arguments.length};//le nombre de datas ajoutés: voir plus tard...
-
     if(this.__owners__){
-
+        //previens les owners
+        var extra = {action:'PUSH', value: arguments.length};//le nombre de datas ajoutés: voir plus tard...
+        
         for (owi=0;owi<this.__owners__.length; owi++){
             ow = this.__owners__[owi];
             if(ow[0].notifyDatasetChanged){
@@ -159,10 +144,10 @@ DBArray.splice = function(){
 };
 DBArray.pop = function(){
     //supprime le dernier element de la liste
-    p = Array.prototype.pop(this,arguments);
-    extra = {action:'POP'}
+    var p = Array.prototype.pop(this,arguments);
+    
     if(this.__owners__){
-
+        var extra = {action:'POP'};
         for (owi=0;owi<this.__owners__.length; owi++){
             ow = this.__owners__[owi];
             if(ow[0].notifyDatasetChanged) ow[0].notifyDatasetChanged(ow[1], extra);
@@ -236,9 +221,10 @@ Object.defineProperty = function (cible, name, accessors){
 				//notifyDatasetChanged(this.__uuid__+":"+obj_k);
                                 
                                 if (this.__uuid__){
-                                        key = this.__uuid__+":"+name;
-                                        if (key in BINDINGS) {
-                                                __notifyDatasetChanged(this,BINDINGS[key], key);
+                                        var key = this.__uuid__+":"+name;
+                                        var bindings = BINDINGS;
+                                        if (key in bindings) {
+                                                __notifyDatasetChanged(this,bindings[key], key);
                                         }
                                 }
                                 
@@ -258,7 +244,7 @@ Object.defineProperty = function (cible, name, accessors){
 //@param obj: le plain object javascript a rendre 'bindable'
 var defineBindObject = function(obj){
     if (obj == null) return;
-    is_array = false;
+    var is_array = false;
 
     if (obj.hasOwnProperty('__uuid__') !== true){
         if (Array.isArray(obj) && ""+Object.prototype.toString.call(obj)!="[object String]"){
@@ -273,7 +259,7 @@ var defineBindObject = function(obj){
 
 
 	//cree la property de marquage
-	uuid = generateUUID();
+	var uuid = generateUUID();
 
 	Object.defineProperty(obj, '__uuid__',{value:uuid , enumerable: false, writable:false});//????? avec le in, pe un probleme?
 	Object.defineProperty(obj, 'notifyDatasetChanged',{value: function(name, extra){
@@ -281,7 +267,7 @@ var defineBindObject = function(obj){
 				//passe l'UUID de l'objet pour retrouver avec la cl�
 				//note, context itou?
 				//notifyDatasetChanged(this.__uuid__+":"+obj_k);
-				key = this.__uuid__+":"+name;
+				var key = this.__uuid__+":"+name;
                                 //("search for "+key);
 				if (key in BINDINGS) {
 					////("OK");
@@ -297,8 +283,10 @@ var defineBindObject = function(obj){
 	};
 	obj.RemoveFormOwners = function(owner, prop_name){
 		if (this.__owners__){
-			for (owi=0;owi<this.__owners__.length; owi++){
-				ow = this.__owners__[owi];
+                        var owi = this.__owners__.length;
+                        while(owi--){
+			//for (owi=0;owi<this.__owners__.length; owi++){
+				var ow = this.__owners__[owi];
 				if (ow[0] == owner && ow[1]==prop_name){
 					this.__owners__.slice(owi,1);//supprime
 					break;//fini
@@ -318,14 +306,17 @@ var defineBindObject = function(obj){
     }
     else {
         //un objet normal, binde les property
-
+        /*var keys = Object.keys(obj);
+        var key_count = keys.length;*/
+        //while (key_count--){
         for (obj_k in obj){
+        //        var obj_k = keys[key_count];
     		if (typeof obj[obj_k] == "function" || obj_k.substr(0,1) == '_')continue;
                 
 
     		//cree le binding, ie, cree une nouvelle property pour l'objet
     		//non enumerable
-            old = obj[obj_k];
+                var old = obj[obj_k];
 
     		Object.defineProperty(obj, "__"+obj_k,{
     			value : obj[obj_k],
@@ -411,9 +402,13 @@ function clear_events (child){
     //uniqument pour lui ou aussi pour les inners????
 	if(child.eventListenerList){
                 //("supprime les events listeners");
+                var events = null;
+                var j=0;
 		for (key in child.eventListenerList){
 				events = child.eventListenerList[key];
-				for(j=0;j<events.length; j++){
+                                j = events.length;
+                                while (j--){
+				//for(j=0;j<events.length; j++){
 					child.removeEventListener(key,events[j] );
                                         
                                         if(child._input_binding)child._input_binding=null;
@@ -423,8 +418,11 @@ function clear_events (child){
 	}
 	if(child.children){
 		//parcours les elements pour virer les events
-		for(var ci=0;ci < child.children.length;ci++){
-			var elem = child.children[ci];
+                var elem = null;
+                var ci = child.children.length;
+                while(ci--){
+		//for(var ci=0;ci < child.children.length;ci++){
+			elem = child.children[ci];
 			clear_events(elem);
 		}
 
@@ -438,6 +436,7 @@ function __prop_binding(infos){
     if (infos == null) return;
 //initialisations pas glop, serait mieux si init a vide...
     this._path = infos.path; 			//getDomPath(this._element, infos.root);
+    //this._id = infos.id;
     this.to=infos.to;					//nom de la property a binder, par defaut setValue?
     this.from = infos.from;				//nom de la datas (ou path) a binder
     //Probleme: si URL, doit creer une nouvelle propriété dans le context pour y stocker les données....
@@ -501,16 +500,19 @@ __prop_binding.prototype.init = function (context){
 //@return array: les noms de property a surveiller (from, alts et converter_params)
 __prop_binding.prototype.getBindingKeys = function(infos){
 
-        infos = infos || this;
+        var infos = infos || this;
         //gestion du 'alt' ------------------------------------------------
-        keys = infos.alt;
+        var keys = infos.alt;
         if(keys) keys = keys.split(',');
         else keys = [];
 
 
         //si des parametres de converter, bind aussi....
         if(this.converter_params != null){
-            for (ci=0;ci<this.converter_params.length;ci++){
+            var ci = this.converter_params.length;
+            var p = null;
+            while(ci--){
+            //for (ci=0;ci<this.converter_params.length;ci++){
                 p = this.converter_params[ci];
                 if (p[0]=='$'){
                     p=p.substring(1);
@@ -549,16 +551,23 @@ __prop_binding.prototype.convert_value=function(value, context){
         //au cas ou des params commencant par $
         
         if (this.converter!=null)
-		{
+	{
             //les parametres
             //probleme, doivent suivre les modifs des parametres...
-            p = null;//pour stocker les valeurs courantes des parametres...
+            var p = null;//pour stocker les valeurs courantes des parametres...
+            var cp = null, key=null, keys = null, v = null;
+            
             if(this.converter_params != null){
+                    
                 if (Array.isArray(this.converter_params)){
                     p = [];
-                    for (cpi=0;cpi<this.converter_params.length;cpi++){
-                        if (this.converter_params[cpi][0]=='$'){
-                            key = this.converter_params[cpi].slice(1);
+                    var cpi = this.converter_params.length;
+                    while(cpi--){
+                    //for (cpi=0;cpi<this.converter_params.length;cpi++){
+                        cp = this.converter_params[cpi];
+                            
+                        if (cp[0]=='$'){
+                            key = cp.slice(1);
 
                             v = context;
                             keys = key.split('.');
@@ -566,8 +575,9 @@ __prop_binding.prototype.convert_value=function(value, context){
                                 v = CONTEXT;//passe en context global
                                 keys = keys.slice(1);//et supprime global de la liste
                             }
-
-                            for (k in keys){
+                            //k = keys.length;
+                            //while(k--){
+                            for (var k = 0, e=keys.length; k<e;k++){
                                 k=keys[k];
                                 if (k in v) v= v[k];
                                 else {
@@ -577,17 +587,18 @@ __prop_binding.prototype.convert_value=function(value, context){
                             }
                             p.push(v);//ajoute la valeur trouvée!
 
-                        } else {p.push(this.converter_params[cpi]);}
+                        } else {p.push(cp);}
                     }
                 } else {
-                    if (this.converter_params[0]=='$'){
+                    cp = this.converter_params;
+                    if (cp[0]=='$'){
 
-                        key = this.converter_params.slice(1);
+                        key = cp.slice(1);
 
                         if(key in context){
                             p = context[key];//recupere la valeur actuelle, mais doit se tenir informé des modifs
                         }
-                    }else {p=this.converter_params;}
+                    }else {p=cp;}
                 }
             }
 		    value = window[this.converter](value,p);
@@ -643,12 +654,12 @@ __textContent_binding.prototype.populate = function(value, context, extra){
         //probleme, si binding interieur, il y a du texte...
         //pourquoi fallback pert les pedales????
         //(this)
-        dt = this._element.textContent;
+        var dt = this._element.textContent;
 
 
         //remplace dans la string html, garde ce qu'il y a avant et apres
-        start = this._index == 0 ? "" : dt.substring(0, this._index);
-        end = dt.substring(this._index + this._length);
+        var start = this._index == 0 ? "" : dt.substring(0, this._index);
+        var end = dt.substring(this._index + this._length);
         //la taille de la datas (pour pouvoir modifier apres)
 
         this._length = value.length;
@@ -672,14 +683,14 @@ __attr_binding.prototype.populate = function(value, context, extra){
         if(value == null) value = this.fallback;
 		value =""+ this.convert_value (value, context);//force string
 
-        dt = this._element.getAttribute("data-binded-"+this.to);
+        var dt = this._element.getAttribute("data-binded-"+this.to);
         if(dt == null){
             //ancienne facon?
             dt = this._element.getAttribute(this.to);
         }
         //remplace dans la string html, garde ce qu'il y a avant et apres
-        start = this._index == 0 ? "" : dt.substring(0, this._index);
-        end = dt.substring(this._index + this._length);
+        var start = this._index == 0 ? "" : dt.substring(0, this._index);
+        var end = dt.substring(this._index + this._length);
 
         this._element.setAttribute(this.to,start + value + end );
         this._key_uuid_ = context.__uuid__+":"+this.from;
@@ -700,12 +711,49 @@ function __model_binding(infos){
     __prop_binding.call(this, infos);
     this.presenter = infos.presenter;	//le code html pour l'affichage des donn�es de l'objet
     this.merge = infos.merge;			//@deprecated compliqué a expliquer pour une utilisation tres reduite (voir exemple SVG)
-    
+    this.empty = infos.empty;
 
-    this._stack = {};					//pour eviter de recreer des trucs a chaque fois...
+    //le cache pour les fallbacks, models...
+    
+    //les data-types
+    model = document.getElementById(this.presenter);
+    if (model){
+           
+        this._root_model = model;
+        this._cache_types = {};
+        
+        //recupere les datas types si existent
+        var children = model.children;
+        if (children == null){
+                children = [];
+                var childs = model.childNodes;
+                var end = childs.length;
+                for (i= 0; i< end; i++){
+                      if (childs[i].nodeType != 8 && (childs[i].nodeType != 3 || /\S/.test(childs[i].nodeValue))){
+                              children.push( childs[i] );
+                              break;
+                      }
+                }
+        }
+        var count = children.length;
+        while (count--){
+                var elem = children[count];
+                var type="defaut";
+                
+                if (elem.hasAttribute("data-type")){
+                        type = elem.getAttribute("data-type");
+                } 
+                //enregistre
+                this._cache_types[type] = elem;
+        }
+        if (this.fallback) this._cache_types['fallback'] = document.getElementById(this.fallback);
+        if (this.empty) this._cache_types['empty'] = document.getElementById(this.empty);
+    }
+    
     
 }
 __model_binding.prototype = new __prop_binding();
+/*
 //ajoute un element au stack pour pouvoir reutiliser plus tard
 	//@param type: le type de donnée (nom de la fonction constructeur)
 	//@param stack: l'element html a ajouter au stack
@@ -718,15 +766,23 @@ __model_binding.prototype = new __prop_binding();
 	//@param type: le type d'element a recuperer (nom de la fonction constructeur)
     __model_binding.prototype._stack_obtain=function(context, type){
         //verifie toute le chaine de prototype
-        //(context);
-        //(type)
+        //("type demandé:"+type)
         
         if (type == "fallback") {
                 if (this._stack[type] != undefined && this._stack[type].length > 0) return this._stack[type].splice(0,1)[0];
                 else return null;
         }
+        else if(type==null || type=='undefined'){
+                //pas de type demandé
+                //("type par defaut");
+                var type="defaut";
+                if(this._stack[type]!=undefined && this._stack[type].length > 0) return this._stack[type].splice(0,1)[0];
+                return null;
+        }
         var proto = context.__proto__;
         //(context.constructor)
+        var presenter_type = null;
+        
         while (proto != null){
 
             presenter_type =  proto.constructor.name;
@@ -742,7 +798,7 @@ __model_binding.prototype = new __prop_binding();
         }
         //celui par defaut?
         //("Recherche stack pour: defaut ")
-        type="defaut";
+        var type="defaut";
         if(this._stack[type]!=undefined && this._stack[type].length > 0) return this._stack[type].splice(0,1)[0];
         return null;
     };
@@ -752,95 +808,85 @@ __model_binding.prototype = new __prop_binding();
 	recupere tout et met dans un stack pour reutilisation
 	*/
     __model_binding.prototype._clean = function(root){
-        stack = {html:null, bindings:[]};
-        old_type = 'Object';
+        //var stack = {html:null, bindings:[]};
+        var old_type = 'defaut';
 
-
+        //("clean child");
         if (root.firstChild != null) {
+                var current_keys = root.firstChild._ftw2_keys;
 
-            old_type = root.firstChild._ftw2_type;
-
-            if(old_type != null){
-
-                //les childs sont les models pour l'objet
-                //recupere dans le stack
-                stack.html = root.firstChild;
-                //old_type = "Object";
-                current_keys = root.firstChild._ftw2_keys;
-
-
-
-        		//TODO: supprime les cl�s de BINDINGS[PAGES_ID] cr�es precedement
-        		if(current_keys){
+                //TODO: supprime les cl�s de BINDINGS[PAGES_ID] cr�es precedement
+                if(current_keys){
                     //("keys!");
 
-                    model_bindings = [];
+                    var model_bindings = [];
+                    var current = null, cr = null, index = 0, test = null;
+                    
         			for (var key in current_keys){
         				//supprime de la page
         				current = current_keys[key];
-        				for (bi=0;bi<current.length;bi++){
+                                        var bi = current.length;
+                                        while(current--){
+        				//for (var bi=0;bi<current.length;bi++){
         					cr = current[bi];
                                                 //supprime  le context si existe
                                                 if (cr.context) cr.context= null;
                                                 
         					index = BINDINGS[key].indexOf(cr);
 
-                            test = BINDINGS[key].splice(index,1)[0];
+                                                test = BINDINGS[key].splice(index,1)[0];
 
         				    model_bindings.push(test);//supprime des bindings
-                            if(BINDINGS[key].length == 0) delete(BINDINGS[key]);
+                                        if(BINDINGS[key].length == 0) delete(BINDINGS[key]);
 
 
         				}
 
         			}
         			this._current_keys ={};//supprime?
-                    stack.bindings = model_bindings;
+                    //stack.bindings = model_bindings;
         		}
 
                 //enregistre dans le stack
                 //prends en compte le data_type ???
                 //("ajoute au stack la clé:"+old_type)
-                this._stack_push (old_type,stack);
-            }
+                //this._stack_push (old_type,stack);
+            //}
             root.removeChild(root.firstChild);
         }
-
-
 
     }
 
 	//gestion du cas value==null
     __model_binding.prototype._process_fallback = function(){
+            
+        //BUG ICI!
+        //("Process fallback for model");
         //si value = null, affiche et bind le fallback
         if (this.fallback == null) {
+            //("look for fallback data-type");
             //regarde si a un datatype=fallback
-            p_type =  this.presenter;
-            presenter_type = p_type+"_fallback";
+            var p_type =  this.presenter;
+            var presenter_type = p_type+"_fallback";
 
     		if (presenter_type in MODELS){
                         //("Fallback found!");
-                elem = this._populate_model(CONTEXT, p_type, "fallback", false);
-                this._element.appendChild(elem);
+                        return this._populate_model(CONTEXT, p_type, "fallback", false);
 
-    		} else {
-
-    			this._element[this.to] = " unknown model! ";//pas de model, ne fait rien
-    		}
-
+    		} 
 
 
         } else {
             //affiche le fallback
             //probleme: doit pouvoir faire des bindings dedans????
-            model = document.getElementById(this.fallback);//il peut y avoir du dtbdg dedans?
-            if (model != null){
-
+            //var model = document.getElementById(this.fallback);//il peut y avoir du dtbdg dedans?
+            //if (model != null){
+            if (this._cache_fallback){
                 //cree un nouveau model avec le fallback
                 //binding du fallback: utilise le context global
                 //elem = model.children[0].cloneNode(true);//fait une deep copy!
-                elem = this._populate_model(CONTEXT, this.fallback, "fallback", false);
-                this._element.appendChild(elem);
+                
+                return this._populate_model(CONTEXT, this.fallback, "fallback", false);
             }
             /*else {
                 //this._element[this.to] = " unknown model! ";//pas de model, ne fait rien
@@ -853,7 +899,6 @@ __model_binding.prototype = new __prop_binding();
         }
     }
 
-
 	//affiche le contenu du model
 	//@param context: l'objet javascript qui servira de context de données
     //@param mroot: element HTML root du presenter (par defaut, recupere this.presenter)
@@ -863,16 +908,20 @@ __model_binding.prototype = new __prop_binding();
         //MODIF 0.2b: bind l'objet (prototype) si necessaire
         
         
+        
+        
 		defineBindObject(context);
         
 		var model =null;//penser a ca....le var!
-		var root_model = document.getElementById(mroot || this.presenter);
+                //var root_model
+                //supprimer cette ligne...
+		//var root_model = document.getElementById(mroot || this.presenter || this.item_presenter);
         var bindings = null;
 
 
         //probleme, si heritage, doit verifier TOUTE la chaine de prototype...
-        item_type = type || context.constructor.name || "defaut";
-        var p_type = mroot || this.presenter;
+        var item_type = type || context.constructor.name || "defaut";
+        var p_type = mroot || this.presenter || this.item_presenter;
 
 
         //verifie si existe un stack, si oui, recupere
@@ -880,113 +929,36 @@ __model_binding.prototype = new __prop_binding();
         var current_keys = [];//les clés crées pour ce model
         var deep_binding = deep || this.deep || true;//pour savoir si rend accessible les données internes au binding
 
-        //si fallback, on a un probleme ici...
-        //considere que le type est Object... pas fallback
-        
-        var old_stack =  this._stack_obtain(context, type);
-        
-        if (old_stack != null){
-            //initialise a partir de ce qui est deja crée
-            //("Recupere du stack....");
-            //les bindings....
-
-            var model_bindings = old_stack.bindings;
-            current_keys = [];
-
-
-
-            for (var mbi=0;mbi<model_bindings.length;mbi++){
-                var mbd = model_bindings[mbi];
-                if(mbd.init != null) mbd.init(context);
-                //(mbd);
-
-                //inscription des clés d'events: uniquement si demandé, ou par defaut?
-                if (deep_binding){
-                    //gestion du 'alt' ------------------------------------------------
-                    keys = this.getBindingKeys(mbd._infos);
-
-                    for (kk = 0; kk<keys.length; kk++){
-                        n_key = keys[kk];
-                        //enregistre les bindings et notify
-                        g_key = context.__uuid__+":"+n_key;
-                        //("create key: "+g_key);
-                        if (g_key in BINDINGS){
-                            //deja connu, ajoute simplement a la liste
-                            BINDINGS[g_key].push(mbd);
-                        }
-                        else {
-                            //inconnu, cree une nouvelle entr�e
-                            BINDINGS[g_key]= [mbd] ;
-                        }
-
-                        //enregistre pour pouvoir nettoyer plus tard....
-                        if (g_key in current_keys){
-                            //deja connu, ajoute simplement a la liste
-                            current_keys[g_key].push(mbd);
-                        }
-                        else {
-                            //inconnu, cree une nouvelle entr�e
-                            current_keys[g_key]= [mbd] ;
-                        }
-
-                    }
-                }
-
-                //notifie le binding maintenant????
-                //__notifyDatasetChanged(context,model_bindings, key);
-            }
-
-
-            //pour chq binding recuperé, doit mettre  a jour...
-            //populate directement???
-            /*for (k in context){
-                g_key = context.__uuid__+":"+k;
-                 if (typeof context[k]!= "function" && g_key in BINDINGS) {
-                     __notifyDatasetChanged(context,BINDINGS[g_key], g_key);
-                 }
-            }*/
-
-            //("Met a jour les données!")
-            __notifyDatasetChanged (context,model_bindings );
-            //notifie et populate les bindings  ????
-
-            //doit aussi rectourner les clés...
-            frag = old_stack.html;
-
-
-        }
-        else {
-            //doit tout creer...
-
-
-            //doit gerer l'heritage.... donc verifier la chaine de prototypes...
-            //presenter_type = p_type+"_"+item_type;
-//("POPULATE MODEL");
-//(this._infos.path);
-
-
-            bindings = null;
-            model = null;
+     
+            var bindings = null;
+            var model = null;
 
             var proto = context;
-            item_type = "";
+            var item_type = "";
 
 
             //recherche le model
             if (type=="fallback"){
                 bindings = MODELS[p_type+"_fallback"] ;
-        	model = root_model.querySelector("[data-type='fallback']");
+                //supprimer cette ligne
+        	model = this._cache_types['fallback'];
+            }
+            else if(type=="empty"){
+                bindings = MODELS[p_type+"_empty"] ;
+                //supprimer cette ligne
+        	model = this._cache_types['empty'];
             }
             else{
                 while (proto != null){
-                        presenter_type = p_type+"_" + proto.constructor.name;
+                        var presenter_type = p_type+"_" + proto.constructor.name;
                         //("Recherche model pour type: "+presenter_type);
                         if (presenter_type in MODELS){
 
-                            item_type = proto.constructor.name;
+                            var item_type = proto.constructor.name;
                             //("model trouvé! "+item_type);
-                                        bindings = MODELS[presenter_type] ;
-                                        model = root_model.querySelector("[data-type='"+item_type+"']");
+                                bindings = MODELS[presenter_type] ;
+                                //supprimer cette ligne...
+                                model = this._cache_types[item_type];//root_model.querySelector("[data-type='"+item_type+"']");
                             break;
                                 }
                         //sinon, suivant
@@ -1005,19 +977,19 @@ __model_binding.prototype = new __prop_binding();
                 //(MODELS)
                 bindings = MODELS[p_type] ;
                 
-                children = root_model.children;
+                /*var children = root_model.children;
                 if (children == null){
                         children = [];
-                        childs = root_model.childNodes;
-                        end = childs.length;
+                        var childs = root_model.childNodes;
+                        var end = childs.length;
                         for (i= 0; i< end; i++){
                               if (childs[i].nodeType != 8 && (childs[i].nodeType != 3 || /\S/.test(childs[i].nodeValue))){
                                       children.push( childs[i] );
                                       break;
                               }
                         }
-                }
-                model = children[0];
+                }*/
+                model = this._cache_types['defaut'];
             }
             //("Creation d'un nouveau model "+p_type);
 
@@ -1038,23 +1010,25 @@ __model_binding.prototype = new __prop_binding();
             //autrement...
 
             cpy_model._ftw2_type = item_type;
-    		var frag = cpy_model;
+                frag = cpy_model;
 
 
     		//fait une copie des bindings de se model et ajoute aux bindings de la page a apartir de la copie
         //(bindings);
         
         
-            for(key in bindings){
+            for(var key in bindings){
 
 
                 var bd = [];
-    			for(h=0;h<bindings[key].length;h++){
+                var h=bindings[key].length;
+                while(h--){
+    			//for(h=0;h<bindings[key].length;h++){
 
                     //copie les infos de binding
     				var infos = {};
-    				inf = bindings[key][h];
-    				for(k in inf){
+    				var inf = bindings[key][h];
+    				for(var k in inf){
     					infos[k]=inf[k];
     				}
 
@@ -1072,16 +1046,18 @@ __model_binding.prototype = new __prop_binding();
                     //cree un nouveau binding
     				var clone = __create_binding_from_infos(infos);//cree le binding, passe la valeur a binder pour determiner le type
 
-                    if (deep_binding === true){
+                    if (context.__uuid__ && deep_binding === true){
                         //gestion du 'alt' ------------------------------------------------
-                        keys =  this.getBindingKeys(infos);
+                        var keys =  this.getBindingKeys(infos);
+                        var kk = keys.length;
+                        while(kk--){
                         //enregistre les bindings
-                        for (kk = 0; kk<keys.length; kk++){
+                        //for (kk = 0; kk<keys.length; kk++){
 
-                            n_key = keys[kk];
+                            var n_key = keys[kk];
 
                             //si processinput, utilise UUID du contexte globale
-                            g_key =context.__uuid__+":"+n_key;
+                            var g_key =context.__uuid__+":"+n_key;
                             //("cree nouvelle clé: "+g_key);
                             if (g_key in BINDINGS){
                                 //deja connu, ajoute simplement a la liste
@@ -1111,50 +1087,65 @@ __model_binding.prototype = new __prop_binding();
                     //enregistre le binding
                     //devrait plutot enregistrer les clés uniquement?
     				bd.push(clone);
-                                if(clone.init != null) clone.init(context);
+                                clone.init(context);
 
     			}
 
                 __notifyDatasetChanged(context,bd, key);
             }
 
-        }
+       
 
         frag._ftw2_keys = current_keys;
         //doit retourner le fragment ET les clés créees...
         return frag;
     }
+    
+    
+    
+	
     __model_binding.prototype.populate = function(context, parent, extra){
 	    //casse la methode pour arraymodel
 		//nettoie si a deja qqchose
 		//tout retirer d'un coup?
                 
-                
-        context = this.convert_value (context, parent);
+        var fragment = document.createDocumentFragment();
+        var sibling = this._element.nextSibling;
+        
+        var parent = this._element.parentNode;
         
         
+        var frag = this._element;
         
-        this._clean(this._element);
+        var context = this.convert_value (context, parent);
+        
+        
+        //("clean child for model");
+        this._clean(frag);
 
         //this._current_keys ={};
         //("populating model! "+this.from);
 
         //nettoie le contenu, passe dans le stack pour reutilisation possible
         //besoin de connaitre le type...
-
+        //("populate model");
+        //(context);
 		if (context == null ){
             //modif, utilise le fallback comme data-type
-
-                this._process_fallback();
-                return;
+                        //("Process fallback!");
+                        frag.appendChild(this._process_fallback());
 
 
 		}
+                else{
+                        //ajoute l'element d'un coup, pas besoin de fragment?
+                        frag.appendChild(this._populate_model(context));//le html generé
+                }
 
-		//ajoute l'element d'un coup, pas besoin de fragment?
-        this._element.appendChild(this._populate_model(context));//le html generé
-
-        this._key_uuid_ = context.__uuid__+":"+this.from;
+		
+        //replace l'element dans la page
+        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+        //this._key_uuid_ = context.__uuid__+":"+this.from;
     }
 
     
@@ -1166,7 +1157,9 @@ function __array_binding(infos){
 
     this.presenter = infos.item_presenter;	//pour affichage de listes//MODIFS: possible d'avoir des datas type....
         this._empty = false;
-
+        
+        //le cache pour les fallbacks, models...
+        
 	this.merge = infos.merge;
 	//sql like
 	/*this.order_by = infos.order_by; 		//un nom de variables pour ordonner la liste
@@ -1175,7 +1168,40 @@ function __array_binding(infos){
 
 	this.ascending = infos.ascending;		//boolean ordre ascendant/decscendant
 	this._current_keys = null;				//cl� de binding cr�es dans la page... */
-
+        //les data-types
+    var model = document.getElementById(this.presenter);
+    if (model){
+             //("Recupere les data types pour le model");
+        this._root_model = model;
+        this._cache_types = {};
+        
+        //recupere les datas types si existent
+        var children = model.children;
+        if (children == null){
+                children = [];
+                var childs = model.childNodes;
+                var end = childs.length;
+                for (i= 0; i< end; i++){
+                      if (childs[i].nodeType != 8 && (childs[i].nodeType != 3 || /\S/.test(childs[i].nodeValue))){
+                              children.push( childs[i] );
+                              break;
+                      }
+                }
+        }
+        var count = children.length;
+        while (count--){
+                var elem = children[count];
+                var type="defaut";
+                
+                if (elem.hasAttribute("data-type")){
+                        type = elem.getAttribute("data-type");
+                } 
+                //enregistre
+                this._cache_types[type] = elem;
+        }
+        if (this.fallback) this._cache_types['fallback'] = document.getElementById(this.fallback);
+        if (this.empty) this._cache_types['empty'] = document.getElementById(this.empty);
+    }
    
 }
 __array_binding.prototype = new __model_binding ();
@@ -1196,27 +1222,27 @@ __array_binding.prototype = new __model_binding ();
 	*/
     __array_binding.prototype._clean_child = function(child, root){
 
-        stack = {html:null, bindings:[]};
-        old_type = 'Object';
+        //var stack = {html:null, bindings:[]};
+        //var old_type = 'defaut';
 
-
+        
         if (child != null) {
+            
             //probleme: si model binding entré directement dans une balise...
-            old_type = child._ftw2_type;
-
-            if(old_type != undefined){
+            /*old_type = child._ftw2_type;
+            if(old_type != undefined){*/
                 //("ajoute au stack")
                 //recupere dans le stack
-                stack.html = child;
-                old_type = "Object";
-                current_keys = child._ftw2_keys;//chq model a ses keys!
+                //stack.html = child;
+                //old_type = "defaut";
+                var current_keys = child._ftw2_keys;//chq model a ses keys!
 
 
 
                 //TODO: supprime les cl�s de BINDINGS[PAGES_ID] cr�es precedement
                 if(current_keys){
 
-                    model_bindings = [];
+                    var model_bindings = [];
                     for (var key in current_keys){
                         //supprime de la page
                         //("supprime: "+key);
@@ -1236,21 +1262,18 @@ __array_binding.prototype = new __model_binding ();
 
                     }
                     //this._current_keys ={};//supprime?
-                    stack.bindings = model_bindings;
+                    //stack.bindings = model_bindings;
                 }
 
                 //enregistre dans le stack
                 //prends en compte le data_type ???
                 //("adding to stack "+old_type);
-                this._stack_push (old_type,stack);
-            }
+                //this._stack_push (old_type,stack);
+            //}
 
             //de toute facon, remove child!
             root.removeChild(child);
         }
-
-
-
     }
     __array_binding.prototype.populate = function (value, context, extra){
 
@@ -1259,92 +1282,79 @@ __array_binding.prototype = new __model_binding ();
         //recupere l'element et place le dans un fragment pour eviter les reflows
 
         //a partir de maintenant, travaille dans le fragment....
+        var fragment = document.createDocumentFragment();
+        var sibling = this._element.nextSibling;
         
-        value = this.convert_value (value, context);
+        var parent = this._element.parentNode;
+        
+        
+        var frag = this._element;
+        
+        
+        fragment.appendChild(frag);//ajoute directement l'element au fragment...
+        
+        //si un textnode, supprime
+        if (frag.firstChild && frag.firstChild.nodeType===3) frag.removeChild(frag.firstChild);
+        
+        
+        
+        
+        var value = this.convert_value (value, context);
 
         if (value == null){
                 //("value is null!");
                 this._empty = true; //marque empty
                 
             //si a des childs, supprime les tous
-            while (this._element.firstChild) {
-                this._element.removeChild(this._element.firstChild);
+            while (frag.firstChild) {
+                frag.removeChild(frag.firstChild);
             }
             
             //("a fallback?"+this.fallback);
             if (this.fallback) {
-                    //("fallback");
-                //this._element[this.to] = " unknown model! ";//pas de model, ne fait rien
-                 /*msg = document.createElement("h1");
-                msg.appendChild(document.createTextNode("Unknown model!!!"));
-                this._element.appendChild( msg);*/
+                
                 //affiche le fallback
-                //probleme: doit pouvoir faire des bindings dedans????
-                model = document.getElementById(this.fallback);//il peut y avoir du dtbdg dedans?
-                if (model != null){
-
-                    //cree un nouveau model avec le fallback
-                    //binding du fallback: utilise le context global
-                    //elem = model.children[0].cloneNode(true);//fait une deep copy!
-                    elem = this._populate_model(CONTEXT, this.fallback, "fallback", false);
-                    this._element.appendChild(elem);
-                }
-                else {
-                    //this._element[this.to] = " unknown model! ";//pas de model, ne fait rien
-                    /*msg = document.createElement("h1");
-                msg.appendChild(document.createTextNode("Unknown model!!!"));
-                this._element.appendChild( msg);*/
-                }
-
-            } else {
                 
-                //("hello");
+                    frag.appendChild(this._populate_model(CONTEXT, this.fallback, "fallback", false));
                 
+
             }
+            
+            //replace l'element dans la page
+            if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
             return;
         }
         //("value exist!");
         if (value.length == 0){
                   this._empty = true; //marque empty
-                
+                //("value is empty!");
             //si a des childs, supprime les tous
-            while (this._element.firstChild) {
-                this._element.removeChild(this._element.firstChild);
+            while (frag.firstChild) {
+                frag.removeChild(frag.firstChild);
             }
-            if (this.empty == null) {
-                //this._element[this.to] = " unknown model! ";//pas de model, ne fait rien
-                 /*msg = document.createElement("h1");
-                msg.appendChild(document.createTextNode("Unknown model!!!"));
-                this._element.appendChild( msg);*/
-
-            } else {
+            if (this.empty ){
                 //affiche le fallback
                 //probleme: doit pouvoir faire des bindings dedans????
-                model = document.getElementById(this._infos.empty);//il peut y avoir du dtbdg dedans?
-                if (model != null){
+                
+               
 
                     //cree un nouveau model avec le fallback
                     //binding du fallback: utilise le context global
-                    //elem = model.children[0].cloneNode(true);//fait une deep copy!
-                    elem = this._populate_model(CONTEXT, this._infos.empty, "empty", false);
-                    this._element.appendChild(elem);
-                }
-                else {
-                    //this._element[this.to] = " unknown model! ";//pas de model, ne fait rien
-                    /*msg = document.createElement("h1");
-                msg.appendChild(document.createTextNode("Unknown model!!!"));
-                this._element.appendChild( msg);*/
-                }
-
+                    //elem = model.children[0].cloneNode(true);//fait une deep copy!                    
+                    frag.appendChild(this._populate_model(CONTEXT, this.empty, "empty", false));
+                
+               
 
             }
+            //replace l'element dans la page
+            if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
             return;
         }
         
         if (this._empty){
                 //supprime la empty view
-                while (this._element.firstChild) {
-                        this._element.removeChild(this._element.firstChild);
+                while (frag.firstChild) {
+                        frag.removeChild(frag.firstChild);
                     }
                 this._empty = false;
                 
@@ -1362,18 +1372,19 @@ __array_binding.prototype = new __model_binding ();
                     //modifie 1 seul element, ie: supprime et remet en place
                     //recherche l'element avec uuid correspondant
                     //("set client at index: "+extra.index)
-                    ci = extra.index;
+                    var ci = extra.index;
 
                     //nettoie les elements html inutiles si besoin
-                    this._clean_child(this._element.children[ci], this._element);
-                    item = value[ci];
-                    result = this._populate_item(item);
+                    this._clean_child(frag.children[ci], frag);
+                    var item = value[ci];
+                    var result = this._populate_item(item);
                     result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
 
                     
-                    prec = ci == 0 ? frag.firstChild : frag.children[ci-1];
-                    this._element.insertBefore(result,prec);
-                    
+                    var prec = ci == 0 ? frag.firstChild : frag.children[ci-1];
+                    frag.insertBefore(result,prec);
+                    //replace l'element dans la page
+                        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     
                     return;
 
@@ -1382,95 +1393,98 @@ __array_binding.prototype = new __model_binding ();
                 case 'POP':{
                     //supprime le  dernier de la listes
                     //("Hello POP!")
-                    this._clean_child(this._element.children[this._element.children.length -1], this._element);
-                    
+                    this._clean_child(frag.children[frag.children.length -1], frag);
+                    //replace l'element dans la page
+        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
                 }
                 case 'PUSH':{
                     //ajoute a la fin
-                    count = extra.value
+                    var count = extra.value
                     //("Ajoute: "+count+" nouveaux elements")
                     //recupere les counts derniers elements
-                    add_childs = [];
-                    first = value.length - count;
-                    for (c=value.length-1;c>= first; c--){add_childs.push(value[c]);}
-                    for (ci=0; ci<add_childs.length;ci++){
+                    var  add_childs = [];
+                    var first = value.length - count;
+                    for (var c=value.length-1;c>= first; c--){add_childs.push(value[c]);}
+                    for (var ci=0; ci<add_childs.length;ci++){
                         //doit etre placé???
-                        item = add_childs[ci];
+                        var item = add_childs[ci];
 
                         //model binding simple????
-                        result = this._populate_item(item);
-                    result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
+                        var result = this._populate_item(item);
+                        result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
 
-                    this._element.appendChild(result);
+                       frag.appendChild(result);
                     }
-                       
+                       //replace l'element dans la page
+        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
                 }
                 case 'SHIFT':{
                     //retire le premier element
                     //("Hello shift!")
-                    this._clean_child(this._element.children[0],this._element);
-                   
+                    this._clean_child(frag.children[0],frag);
+                   //replace l'element dans la page
+        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
                 }
                 case 'UNSHIFT':{
                     //ajoute en debut de tableau
-                    count = extra.value
+                    var count = extra.value
                     //recupere les counts derniers elements
-                    add_childs = [];
-                    for (c=count - 1 ;c>=0; c--){add_childs.push( value[c]);}
-                    for (ci=0; ci<add_childs.length;ci++){
+                    var add_childs = [];
+                    for (var c=count - 1 ;c>=0; c--){add_childs.push( value[c]);}
+                    for (var ci=0; ci<add_childs.length;ci++){
                         //doit etre placé???
-                        item = add_childs[ci];
+                        var item = add_childs[ci];
 
                         //model binding simple????
-                        result = this._populate_item(item);
+                        var result = this._populate_item(item);
                         result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
 
-                        this._element.insertBefore(result, this._element.firstChild);
+                        frag.insertBefore(result, frag.firstChild);
                     }
-
+                        //replace l'element dans la page
+        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
                 }
                 case 'SPLICE':{
                     //supprime ET ajoute
                     
+                    //("splice!!!!");
                     
-                    index=extra.index;
-                    howmany=extra.howmany;
-                    count = extra.count;
-                    
+                    var index=extra.index;
+                    var howmany=extra.howmany;
+                    var count = extra.count;
+                    //(index+","+howmany+","+count);
                     //supprime
                     //ici, travaille sur tout le tableau
-                    removeChilds = [];
-                    for (ci=index;ci<index+count+1;ci++)removeChilds.push(this._element.children[ci]);//par defaut, supprime tous les childs de la liste
+                    
+                    for (var ci=index;ci<index+howmany;ci++)this._clean_child(frag.children[ci],frag);//par defaut, supprime tous les childs de la liste
 
-                    //nettoie les elements html inutiles si besoin
-                    for(ci=removeChilds.length-1;ci>=0;ci--){
-                        
-                        this._clean_child(removeChilds[ci],this._element);
-                    }
+                    
 
                     //si doit ajouter en position...
-                    if (count != undefined){
-                        add_childs = [];
-                        prec = this._element.children[index];
-                        for (c=count - 1 ;c>=0; c--){add_childs.push( value[index+c]);}
-                        for (ci=0; ci<add_childs.length;ci++){
+                    if (count != undefined && count >0){
+                        var add_childs = [];
+                        var prec = frag.children[index];
+                        for (var c=count - 1 ;c>=0; c--){add_childs.push( value[index+c]);}
+                        for (var ci=0; ci<add_childs.length;ci++){
                             //doit etre placé???
-                            item = add_childs[ci];
+                            var item = add_childs[ci];
 
                             //model binding simple????
-                            result = this._populate_item(item);
+                            var result = this._populate_item(item);
                             result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
 
-                            this._element.insertBefore(result, prec);
+                            frag.insertBefore(result, prec);
+                            
                         }
 
 
                     }
-
+                    //replace l'element dans la page
+        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
 
                 }
@@ -1484,50 +1498,55 @@ __array_binding.prototype = new __model_binding ();
 //("UPDATE ALL THE ARRAY!")
 //(this._element.textContent)
         //si a anotter le binding en text
-        if (this._element.textContent != undefined) this._element.textContent = "";
+        //if (this._element.textContent != undefined) this._element.textContent = "";
         //ici, travaille sur tout le tableau
-        var removeChilds = this._element.children;//par defaut, supprime tous les childs de la liste
-        if (removeChilds == null){
-                        removeChilds = [];
-                        childs = this._element.childNodes;
-                        end = childs.length;
-                        for (i= 0; i< end; i++){
-                              if (childs[i].nodeType != 8 && (childs[i].nodeType != 3 || /\S/.test(childs[i].nodeValue))){
-                                      children.push( childs[i] );
-                                      
-                              }
-                        }
+        //var removeChilds = this._element.children ;//par defaut, supprime tous les childs de la liste
+        var removeChilds = frag.children ;
+        if (removeChilds==null){
+                removeChilds = [];
+                //var childs = this._element.childNodes;
+                var childs = frag.childNodes;
+                var end = childs.length;
+                for (i= 0; i< end; i++){
+                      if (childs[i].nodeType != 8 && (childs[i].nodeType != 3 || /\S/.test(childs[i].nodeValue))){
+                              removeChilds.push( childs[i] );
+                              
+                      }
                 }
+        }
        
 //(this._element.childs)
         //nettoie les elements html inutiles si besoin
         
-                for(ci=removeChilds.length-1;ci>=0;ci--){
-                    this._clean_child(removeChilds[ci], this._element);
-                
-                }
+        for(var ci=removeChilds.length-1;ci>=0;ci--){
+            //this._clean_child(removeChilds[ci], this._element);
+            this._clean_child(removeChilds[ci], frag);
+        
+        }
         
 
-        add_childs = value;
+        //add_childs = value;
         //ajoute les nouveaux elements
         //modifie le html
         //par defaut, ajoute tous les elements de la liste
-        for (ci=0; ci<add_childs.length;ci++){
+        for (var ci=0; ci<value.length;ci++){
             //doit etre placé???
-            item = add_childs[ci];
-
+            var item = value[ci];
+            //(item);
             //model binding simple????
             //("Populating item")
             //(item)
-            result = this._populate_item(item);
-            result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
+            var result = this._populate_item(item);
+            //result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
 
-            this._element.appendChild(result);
+            //this._element.appendChild(result);
+            frag.appendChild(result);
         }
         //affichage des groupes
 
         this._key_uuid_ = context.__uuid__+":"+this.from;
-
+        //replace l'element dans la page
+        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
 
         /*var frag = document.createDocumentFragment();
 		this.__populate_group(tmp[group], frag);
@@ -1647,15 +1666,15 @@ __array_binding.prototype = new __model_binding ();
 		if (context == null ){
             //modif, utilise le fallback comme data-type
 
-                this._process_fallback();
-                return;
+                return this._process_fallback();
+                
 
 
 		}
 
 		//ajoute l'element d'un coup, pas besoin de fragment?
-        child = this._populate_model(context);//le html generé
-
+        var child = this._populate_model(context);//le html generé
+        
         this._key_uuid_ = context.__uuid__+":"+this.from;
         return child;
     
@@ -1848,7 +1867,7 @@ __input_binding.prototype.on_process_event = function(evt){
                     this.placeholder = bind.fallback;
                     
                 }
-                
+                //("PROCESS EVENT:"+value);
                 
 		try{
                         //("tente de mettre a jour la donnée");
@@ -1995,9 +2014,9 @@ function __webservice_parameter(name,value){
 }
 __webservice_parameter.prototype.getParameter = function(context){
         value = context[this.value];
-        console.log("get parameter:"+value);
+        //("get parameter:"+value);
         if (value == null){
-                console.log("NULL VALUE");
+                //("NULL VALUE");
                 if( this.important) throw Error();
                 else return this.name+"=";
         }
@@ -2019,7 +2038,7 @@ function __webservice_url (url){
         //recupere la premiere position du ? pour les parametres
         params_pos = url.indexOf("?");
         if(params_pos != -1){
-                console.log("des parametres!!!");
+                //("des parametres!!!");
                 //recupere le corps de l'URL
                 this._url = url.substr(0,params_pos);
                 param_str = url.substr(params_pos+1);//unqiement les parametres...
@@ -2043,11 +2062,11 @@ function __webservice_url (url){
                                 match = __webservice_param_regex.exec(param_str);
                         }
                         
-                        console.log(param_str);
+                        //(param_str);
                         this._param_str = param_str;
                         
                     } else {
-                            console.log("pas de parametres...");
+                            //("pas de parametres...");
                     }
         }
         
@@ -2067,27 +2086,105 @@ __webservice_url.prototype.getURL = function(context){
                         url+="?";
                         str = this._param_str;
                         for (upi=0;upi<this._params.length;upi++){
-                                console.log(upi+", "+this._params[upi]);
+                                //(upi+", "+this._params[upi]);
                                 v = this._params[upi].getParameter(context);
                                 str = str.replace("{"+upi+"}",v);
-                                console.log(str);
+                                //(str);
                         }
                         
                         url+= str;
                 
                 }
-                console.log(url);
+                //(url);
                 return url;
         } catch(Error){ 
-                console.log(Error);
-                console.log("parametre obligatoire non present: annule");
+                //(Error);
+                //("parametre obligatoire non present: annule");
                 return null;}
 };
 __webservice_url.prototype.getParametersNames = function(){
         //renvoie la liste des parametres sous forme de string csv
-        s = this._params.join(",");
-        console.log(s);
-        return s;
+        return this._params.join(",");
+}
+
+
+//Recuperation des datas depuis un service web (renvoyant du JSON)
+//Les erreurs: timeout et loaderror
+
+//un waitingobj:???
+
+//l'objet AJAX lui meme 
+var xhr_timeout = 4000;//4 secondes avant annulation de la requete XHR
+function WEBSERVICE_LOADING (msg){ this.message = msg;}
+function WEBSERVICE_ERROR (err){
+        this.message=""+err;
+}
+function WEBSERVICE_TIMEOUT (err){
+        this.message = ""+err;
+}
+function __load_async_datas ( url, context, prop, key){
+          var xhr = new XMLHttpRequest();
+          //("loading async datas from webservice....");
+          //met en attente
+          context[prop] = new WEBSERVICE_LOADING();
+          context.notifyDatasetChanged(key,1);
+                      
+                      
+          xhr.onload = function(e){
+            //("get datas!!!");
+            if(xhr.status !== 200) {
+                      //erreur
+                      //("erreur code:"+xhr.status);
+                      context[prop] = new WEBSERVICE_ERROR(xhr.responseText);
+                      context.notifyDatasetChanged(key,1);
+                      return;
+                }
+            
+            datas = xhr.response;
+            
+            if (datas == null){
+                    context[prop] = null ;
+                    context.notifyDatasetChanged(key,1);
+                    return;
+            }
+            
+            type = xhr.getResponseHeader("content-type");
+            if (type.startsWith("application/json")){
+                    //parse le contenu JSON
+                    //quid si XML????
+                    try{                                
+                                datas = JSON.parse(datas);
+                        } catch(Error){
+                                datas  = new WEBSERVICE_ERROR("Erreur lors du parse JSON");
+                        }
+                        
+            } else if(this.reader){
+                    datas = window[this.reader](datas);
+            } 
+           //sinon, assume simple string?
+           context[prop] = datas ;
+           context.notifyDatasetChanged(key,1);
+                    
+          };
+        
+            xhr.onerror = function(err){
+                    //("une erreur");
+                    //(err);
+                context[prop] = new WEBSERVICE_ERROR(err);
+                context.notifyDatasetChanged(key,1);
+            };
+        
+          
+        xhr.timeout = xhr_timeout;
+        xhr.ontimeout = function(err){
+                context[prop] = new WEBSERVICE_TIMEOUT(err);
+                context.notifyDatasetChanged(key,1);
+        };
+            
+          
+
+          xhr.open('GET', url);
+          xhr.send();
 }
 
 
@@ -2105,7 +2202,7 @@ function __webservice_model_binding (infos){
             //comme webservice, les données ne sont pas modifiable, donc ne binde pas les proprietes de l'objet
             //this.deep = false; on annule ca....
             //ajoute au alt pour etre prevenu d'un changement
-            params = this._url.getParametersNames();
+            var params = this._url.getParametersNames();
             if(params){
                 if (this.alt == undefined){
                         this.alt = params;
@@ -2140,9 +2237,9 @@ __webservice_model_binding.prototype.init = function(context){
 }
 __webservice_model_binding.prototype.populate = function(value, context, extra){
         //ici, populate relance la requete ajax
-        console.log("webservice populate: extra: "+extra);
-        console.log(value); //pourquoi value = undefined????
-        console.log(context);
+        //("webservice populate: extra: "+extra);
+        //(value); //pourquoi value = undefined????
+        //(context);
         if (extra){
                 //populate normal
                 __model_binding.prototype.populate.call(this, value, context);
@@ -2154,6 +2251,9 @@ __webservice_model_binding.prototype.populate = function(value, context, extra){
         }
 }
     
+    
+    
+    
 /**permet de mettre a jour l'ui lorsqque les datas ont chang�es
 @param key: le nom de la property qui a chang�e ou null pour mettre a jour toute la page
 @args: parametres optinnels ou particulier a un type de binding*/
@@ -2162,15 +2262,16 @@ function notifyDatasetChanged(key, extra){
 	//contexte a prendre en compte////
 	if (key==null || key==''){
         //pas de process update ici, mise a jour a l'init...
+       var name = null, bds = null, b= null;
        
         for(key in BINDINGS){
-               console.log(key);
+               //(key);
             name = key.split(':')[1];//nom de la property
             bds = [];
             for (i=0;i<BINDINGS[key].length;i++){
                 b = BINDINGS[key][i];
-                console.log("search: "+name);
-                console.log("binding: "+b.from);
+                //("search: "+name);
+                //("binding: "+b.from);
                 if(b.from == 'COMMANDS' || b.from == name) bds.push(b);//doit reagir
             }
             __notifyDatasetChanged(CONTEXT, bds, key);
@@ -2192,10 +2293,13 @@ function notifyDatasetChanged(key, extra){
 //@param key: clé de binding
 //@param extra: parametres optionnels
 function __notifyDatasetChanged(context,bindings, key, extra){
-
-	for (k in bindings) {
-		var value = null;
+        //("__notifyDatasetChanged");
+        var value = 0, binding = null, v_key = null;
+	for (var k in bindings) {
+                //("populate "+k);
+		value = null;
 		binding = bindings[k];
+                //(binding);
                 //context = binding.context || CONTEXT;
                 //(binding)
 
@@ -2256,14 +2360,14 @@ function __get_bindings(root, process_event, search){
             null);
 	//me renvois tout les elements de la page?????
 	var elem = binders.iterateNext();//MODIF: passe au suivant
-    var pg_bindings = [];
+    var pg_bindings = [] , bindings = null;
 
     //recupere les elements de la page demandant un binding de donn�es
 
 
 	while (elem != null){
                 //parse tous les attributs pour trouver ceux bind�s
-                var bindings = __get_binding_from_attributes(elem, root, process_event);
+                bindings = __get_binding_from_attributes(elem, root, process_event);
                 
                 
                 if (bindings==null || bindings.length == 0){
@@ -2292,8 +2396,9 @@ function __get_bindings(root, process_event, search){
 //surement possible en maitrisant mieux le xpath que moi....
 function __prepare_binding(bindings, process_event, pg_bindings ){
         
-                              
-        for (j=0;j<bindings.length;j++){
+        var j=bindings.length, k=null, keys=null;
+        while(j--){
+        //for (var j=0;j<bindings.length;j++){
                 binding = bindings[j];
                 //ici, bon endroit pour specifier un binding parent si existe...
 
@@ -2308,11 +2413,13 @@ function __prepare_binding(bindings, process_event, pg_bindings ){
 //(binding);
             if (process_event){
                 //traite aussi les alt
-                var keys = binding.getBindingKeys();
+                keys = binding.getBindingKeys();
 
                         //pour chaque cl� de bindings....
-                        for (kk = 0; kk<keys.length; kk++){
-                                key = keys[kk];
+                        var kk=keys.length;
+                        while(kk--){
+                        //for (kk = 0; kk<keys.length; kk++){
+                                var key = keys[kk];
                                 //si processinput, utilise UUID du contexte globale
                                 key = CONTEXT.__uuid__+":"+key;
                                 if (key in pg_bindings){
@@ -2351,12 +2458,14 @@ function __prepare_binding(bindings, process_event, pg_bindings ){
 function __get_binding_from_attributes(elem,root, process_event){
     var bindings = [];
 //("Recherche les bindings....");
-	attrs = elem.attributes;
+     var attrs = elem.attributes;
 
     //for (attr of elem.attributes){
-	for (ij=0; ij<attrs.length;ij++){
+        var ij = attrs.length;
+        while(ij--){
+	//for (ij=0; ij<attrs.length;ij++){
 		attr = elem.attributes[ij];
-		bind = __parse_attribute (elem, root, attr.nodeName,attr.value, process_event );
+		var bind = __parse_attribute (elem, root, attr.nodeName,attr.value, process_event );
 
 		if(bind != null )bindings.push(bind);
 
@@ -2382,7 +2491,7 @@ function __get_binding_from_attributes(elem,root, process_event){
     if(result != ""){
             //("analyse inner text "+result);
             
-        bind = __parse_attribute (elem, root, 'innerHTML', result, process_event );
+        var bind = __parse_attribute (elem, root, 'innerHTML', result, process_event );
         if(bind != null )bindings.push(bind);
     }
 
@@ -2400,28 +2509,31 @@ function __get_binding_from_attributes(elem,root, process_event){
 //@param process_infos: si doit creer ou non le binding
 //@return infos: informations de bindings ou le binding lui meme
 function __parse_attribute(elem, root, nodeName, value, process_event){
-	cmds = value;
+	var cmds = value;
 
         if (cmds == null || cmds == '') return null;
         
         //verifie qu'il y a une chance d'avoir un binding dans cet attribut/valeur
-        match = __verif_regex__.exec(cmds);
+        var match = __verif_regex__.exec(cmds);
         
         if (match == null) return null;//pas de correspondance pour le premier        //prends en compte plusieurs matches (par exemple pour les classes,????
         //while (match != null){
 		cmds = match[1];//unqiuement les infos de bindings
                 //cree le binding et populate (par regex)
 
-		d_b = [];//un tableau vide
+		var d_b = [];//un tableau vide
 
 		//si process event, recupere l'element, sinon, get path
-                
+                /*var cpy_elem = elem.cloneNode(true);
+                //("clone element");*/
 		d_b["_element"]= elem;//le html a binder
 		d_b["root"] = root;//le root de l'element (si necessaire)
 		d_b["path"] = getDomPath(elem, root);
+                //probleme XPATH: ne dois pas modifier le document!
+                //if (!cpy_elem.hasAttribute('id')) cpy_elem.setAttribute('id',generateUUID());
+                //d_b["id"]=cpy_elem.getAttribute('id');
                 
-                
-		to=nodeName;//le nom de l'attribut
+		var to=nodeName;//le nom de l'attribut
 		//MODIF: si commence par data-binded-, extrait e nom de la property
 		if(to.indexOf("data-binded-") == 0) {
 
@@ -2430,13 +2542,13 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
 
 		d_b["to"]=to;
 
-		match_index = __verif_regex__.lastIndex - cmds.length ;
+		var match_index = __verif_regex__.lastIndex - cmds.length ;
 
 		d_b['_index'] = match_index;//position dans la chaine
 		d_b["_length"] = cmds.length;
 
 		//recupere les commandes
-		match2 = __regex__.exec(cmds);
+		var match2 = __regex__.exec(cmds);
 		while (match2 != null){
                         
 			d_b[match2[1]] = match2[2];
@@ -2531,86 +2643,6 @@ function __unstringify(value){
         value = value.substring(1, value.length-1);
     }
     return value;
-}
-
-
-//Recuperation des datas depuis un service web (renvoyant du JSON)
-//Les erreurs: timeout et loaderror
-
-//un waitingobj:???
-
-//l'objet AJAX lui meme 
-var xhr_timeout = 4000;//4 secondes avant annulation de la requete XHR
-function WEBSERVICE_LOADING (msg){ this.message = msg;}
-function WEBSERVICE_ERROR (err){
-        this.message=""+err;
-}
-function WEBSERVICE_TIMEOUT (err){
-        this.message = ""+err;
-}
-function __load_async_datas ( url, context, prop, key){
-          var xhr = new XMLHttpRequest();
-          console.log("loading async datas from webservice....");
-          //met en attente
-          context[prop] = new WEBSERVICE_LOADING();
-          context.notifyDatasetChanged(key,1);
-                      
-                      
-          xhr.onload = function(e){
-            console.log("get datas!!!");
-            if(xhr.status !== 200) {
-                      //erreur
-                      console.log("erreur code:"+xhr.status);
-                      context[prop] = new WEBSERVICE_ERROR(xhr.responseText);
-                      context.notifyDatasetChanged(key,1);
-                      return;
-                }
-            
-            datas = xhr.response;
-            
-            if (datas == null){
-                    context[prop] = null ;
-                    context.notifyDatasetChanged(key,1);
-                    return;
-            }
-            
-            type = xhr.getResponseHeader("content-type");
-            if (type.startsWith("application/json")){
-                    //parse le contenu JSON
-                    //quid si XML????
-                    try{                                
-                                datas = JSON.parse(datas);
-                        } catch(Error){
-                                datas  = new WEBSERVICE_ERROR("Erreur lors du parse JSON");
-                        }
-                        
-            } else if(this.reader){
-                    datas = window[this.reader](datas);
-            } 
-           //sinon, assume simple string?
-           context[prop] = datas ;
-           context.notifyDatasetChanged(key,1);
-                    
-          };
-        
-            xhr.onerror = function(err){
-                    console.log("une erreur");
-                    console.log(err);
-                context[prop] = new WEBSERVICE_ERROR(err);
-                context.notifyDatasetChanged(key,1);
-            };
-        
-          
-        xhr.timeout = xhr_timeout;
-        xhr.ontimeout = function(err){
-                context[prop] = new WEBSERVICE_TIMEOUT(err);
-                context.notifyDatasetChanged(key,1);
-        };
-            
-          
-
-          xhr.open('GET', url);
-          xhr.send();
 }
 
 
