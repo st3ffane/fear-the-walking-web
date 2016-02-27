@@ -20,7 +20,21 @@
         - memoire/fuite
 
 */
-
+//TEST UMD: au plus simple pour l'instant....
+(function (window, factory) { 
+        if (typeof define === 'function' && define.amd) define(factory); // AMD
+        else if (typeof exports === 'object') module.exports = factory(); // Node
+        else window['FTW2'] = new(factory())(); 
+        
+}(this, function () {
+        
+        
+        
+        
+        
+        
+        
+        
 var CONTEXT = null;                //data context de l'application/page web
 var BINDINGS = [];//dictionnaire associant clé de binding a liste d'elements a prevenir
 var MODELS = {};				   //des binding models a ajouter/supprimer des pages
@@ -601,8 +615,14 @@ __prop_binding.prototype.convert_value=function(value, context){
                     }else {p=cp;}
                 }
             }
-		    value = window[this.converter](value,p);
-		}
+            
+                //la methode: si commence par ftw2:, une methode du framework
+                if (this.converter.startsWith("ftw2:")){
+                        converter = this.converter.substr(5);
+                        //appel a la methode
+                        value = eval(converter)(value,p);
+                } else {   value = window[this.converter](value,p); }
+	}
         return value;
     }
 
@@ -1762,8 +1782,11 @@ var cb_pr = {
                 //un tableau de parametres
                 value = value.substring(1, value.length-2);
                 this._cmd_parameters = [];
-                for (p of value.split(',')){
-                    this._cmd_parameters.push(p);
+                var cmds = value.split(',');
+                var cmd_length = cmds.length;
+                
+                for (var p=0;p<cmd_length;p++){
+                    this._cmd_parameters.push(cmds[p]);
                 }
             }
 
@@ -2613,7 +2636,7 @@ function __create_binding_from_infos(d_b){
                                 //force l'event sur le click
                                 if (d_b.event == undefined) d_b.event = "click";     //sauf si s'en sert...
                                 if (d_b.converter == undefined){
-                                        d_b.converter="check_radio_value";
+                                        d_b.converter="ftw2:check_radio_value";
                                         d_b.converter_params="'"+d_b._element.value+"'";
                                 }
                                  
@@ -2798,3 +2821,12 @@ function AppInit(){
 }
 //lance au chargement...
 window.addEventListener("load",AppInit);
+
+        
+        
+        //MON PACKAGE
+        FTW2 = function(){}
+        return FTW2;
+
+
+}));//fin UMD

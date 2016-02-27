@@ -3,8 +3,25 @@
   <meta charset="utf-8">
   <title>Fear the walking web! Demos</title>
 
-	<script src="../../fear-the-walking-web-flesh-and-bones.js"></script>
+	<script src="../../ftw2-min.js"></script>
 	<script>
+
+/*
+Genere un id unique pour chaque objet a lier
+*/
+var __uuid_date = null;
+function generateUUID() {
+    __uuid_date = new Date().getTime();
+    var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, __replace_uuid);
+    return uuid;
+};
+function __replace_uuid(c){
+        var d = __uuid_date;
+        var r = (d + Math.random()*16)%16 | 0;
+        d = Math.floor(d/16);
+        return (c=='x' ? r : (r&0x3|0x8)).toString(16);
+}
+
         function Client (id, n,p,s){
                 //on ajoute un identifiant unique au client (comme s'il provennait d'une base de données par exemple)
                 //generateUUID() est une methode définie dans le framwork qui fait ce que son nom indique...
@@ -146,7 +163,7 @@
                         }
                 }
                 
-                 console.log(BINDINGS);
+                 
         };
         
         
