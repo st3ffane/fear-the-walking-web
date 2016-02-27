@@ -552,6 +552,6 @@ function AppInit(){
 
 
 //lance au chargement...
-window.addEventListener("load",FTW2.AppInit);
+window.addEventListener("load",AppInit);
         
         

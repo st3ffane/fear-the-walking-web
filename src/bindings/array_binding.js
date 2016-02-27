@@ -274,7 +274,7 @@ __array_binding.prototype.populate = function (value, context, extra){
 
 
         //ajoute les nouveaux elements
-        for (var ci=0; ci<value.length;ci
+        for (var ci=0; ci<value.length;ci++){
             var item = value[ci];
             var result = this._populate_item(item);
             frag.appendChild(result);

@@ -40,8 +40,11 @@ var cb_pr = {
                         //un tableau de parametres
                         value = value.substring(1, value.length-2);
                         this._cmd_parameters = [];
-                        for (p of value.split(',')){
-                                this._cmd_parameters.push(p);
+                        var cmds = value.split(',');
+                        var cmd_length = cmds.length;
+                        
+                        for (var p=0;p<cmd_length;p++){
+                            this._cmd_parameters.push(cmds[p]);
                         }
                 }
 

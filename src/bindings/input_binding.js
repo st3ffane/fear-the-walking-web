@@ -98,7 +98,7 @@ __input_binding.prototype.on_process_event = function(evt){
                                                                 
                                                                  //remet la valeur????
                                                                 value = bind.convert_value (bind.context[bind.from], bind.context);
-                                                                if(value === null || value === undefined || value==="") 
+                                                                if(value === null || value === undefined || value==="") {
                                                                     bind._element.placeholder = this.fallback;
                                                                     bind._element.value="";
                                                                     return;
