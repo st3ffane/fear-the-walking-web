@@ -19,14 +19,14 @@ module.exports = function(grunt) {
                        'src/bindings/extras/webservice_binding.js',
                        'src/utils.js',
                         'src/ftw2.js'],
-                dest: 'output/concat.js'
+                dest: 'builds/concat.js'
               }
         },
         umd: {
                 all: {
                     options: {
-                        src: 'output/concat.js',
-                        dest: 'output/ftw2.js', // optional, if missing the src will be used
+                        src: 'builds/concat.js',//comment supprimer le fichier une fois fini???
+                        dest: 'builds/ftw2.js', // optional, if missing the src will be used
                         
                     }
                 }
@@ -37,8 +37,8 @@ module.exports = function(grunt) {
                         separator: ';'
                       },
               dist: {
-                src: ['output/ftw2.js'],
-                dest: 'output/ftw2-min.js'
+                src: ['builds/ftw2.js'],
+                dest: 'builds/ftw2-min.js'
               }
         }
   })
