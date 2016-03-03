@@ -73,8 +73,11 @@ __prop_binding.prototype = {
 __prop_binding.prototype.init = function (context){
         //rien ici...
 }
+//nettoyage du binding: rien ici
+__prop_binding.prototype._clean = function (){}
 //Recupere le nom de toutes les property a surveiller pour la mise
 //a jour de ce binding
+//PROBLEME: appel a cette méthode a chaque mise a jour des données, il faudrait mettre le resultat en cache?                  ====> TODO
 //@param infos: les informations de binding
 //@return array: les noms de property a surveiller (from, alts et converter_params)
 __prop_binding.prototype.getBindingKeys = function(infos){
@@ -184,7 +187,14 @@ __prop_binding.prototype.convert_value=function(value, context){
                         converter = this.converter.substr(5);
                         //appel a la methode
                         value = eval(converter)(value,p);
-                } else {   value = window[this.converter](value,p); }
+                } else {
+                        //considere que la methode se trouve en portée globale.
+                        //OU oblige a la creer dans le context de données global?????                                   ==> TODO
+                        
+                        
+                        if (this.converter in CONTEXT && CONTEXT[this.converter] instanceof Function) value = CONTEXT[this.converter](value,p);
+                        else value = window[this.converter](value,p); 
+                }
 	}
         return value;
     }

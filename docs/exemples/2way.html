@@ -3,7 +3,7 @@
   <meta charset="utf-8">
   <title>Fear the walking web! Demos</title>
 
-	<script src="ftw2-min.js"></script>
+	<script src="../../build/ftw2.js"></script>
 	<script>
 
 /*
@@ -30,10 +30,10 @@ function __replace_uuid(c){
                 this._Nom = n;
                 this._Prenom = p;
                 this._Sexe = s;
-                
+         };      
                 //initialise mon objet, si pas de parametres, initialise par defaut
                 
-                Object.defineProperty(this,"nom",{
+                Client.defineBindProperty("nom",{
                         get: function(){return this._Nom;},
                         set: function(v){
                                 console.log(this);
@@ -55,7 +55,7 @@ function __replace_uuid(c){
                         }
                 });  
                 
-                Object.defineProperty(this,"prenom",{
+                Client.defineBindProperty("prenom",{
                         get: function(){return this._Prenom;},
                         set: function(v){
                                 //n'autorise pas les valeurs nulles
@@ -71,7 +71,7 @@ function __replace_uuid(c){
                                 
                         }
                 });  
-                Object.defineProperty(this,"sexe",{
+                Client.defineBindProperty("sexe",{
                         get: function(){return this._Sexe;},
                         set: function(v){
                                 //n'autorise pas les valeurs autres que M,F et U
@@ -90,30 +90,30 @@ function __replace_uuid(c){
                 
                 
                 
-        };
+        
        
                
         
         
         
-        myContext = {  
+        function myContext() {  
                 //une liste de clients renseignée par défaut
-                clients : [ new Client(generateUUID(),"MANSON","Marylin","U"),new Client(generateUUID(),"MALLOW","Marc","M"), new Client(generateUUID(),"DALTON","M'a","F")],
+                this.clients = [ new Client(generateUUID(),"MANSON","Marylin","U"),new Client(generateUUID(),"MALLOW","Marc","M"), new Client(generateUUID(),"DALTON","M'a","F")],
                 //le client selectionné à éditer
-                selected : null,
+                this.selected = null,
                 
                 //pour les exemples de bindings
-                message : null, //binding input type=text
-                types : true, //binding checkbox
-                possible:null,//la selection du select
-                possibles : [ {value:"fr",label:"Bonjour"},{value:"en",label:"Hello"},{value:"es",label:"Ola"}], //les differentes possibilités value:valeur
+                this.message = null, //binding input type=text
+                this.types = true, //binding checkbox
+                this.possible=null,//la selection du select
+                this.possibles = [ {value:"fr",label:"Bonjour"},{value:"en",label:"Hello"},{value:"es",label:"Ola"}], //les differentes possibilités value:valeur
                 
-                _Verifiable : "ma valeur par defaut" , //une propriété qui ne doit pas etre null!
-                _Numeric : 3,
+                this._Verifiable = "ma valeur par defaut" , //une propriété qui ne doit pas etre null!
+                this._Numeric = 3;
         };
         
         //on crée une property javascript type getter/setter avec les verifications
-        Object.defineProperty(myContext,"Verifiable",{
+        myContext.defineBindProperty("Verifiable",{
                 get: function(){return this._Verifiable;},
                 set: function(value){
                         console.log("Verification des infos:"+value)
@@ -126,7 +126,7 @@ function __replace_uuid(c){
                         this._Verifiable = value;
                 }
         });
-        Object.defineProperty(myContext,"numeric",{
+        myContext.defineBindProperty("numeric",{
                 get:function(){return this._Numeric;},
                 set:function(value){
                         if (value>0) this._Numeric = value;
@@ -134,7 +134,7 @@ function __replace_uuid(c){
                 }
         });
        
-        myContext.delete_client = function(evt, id){
+        myContext.prototype.delete_client = function(evt, id){
                 //recherche l'index du client a supprimer
                 for (i=0;i<this.clients.length;i++){
                         //si l'id est le bon
@@ -145,14 +145,14 @@ function __replace_uuid(c){
                         }
                 }
         }
-        myContext.add_client = function(evt){
+        myContext.prototype.add_client = function(evt){
                 //ajoute un nouveau client à la liste
                 cl = new Client();
                 //selectionne le pour edition
                 this.selected = cl;
         };
         
-        myContext.edit_client = function(evt, id){
+        myContext.prototype.edit_client = function(evt, id){
                 //comme pour le delete, recherche le client à editer
                 for (i=0;i<this.clients.length;i++){
                         //si l'id est le bon
@@ -167,7 +167,7 @@ function __replace_uuid(c){
         };
         
         
-        myContext.action_submit = function(evt, params){
+        myContext.prototype.action_submit = function(evt, params){
         
                 evt.preventDefault();//ne pas oublier ca....
                 id = this.selected.id;
@@ -194,13 +194,16 @@ function __replace_uuid(c){
         
         
         //un converter pour determiner la classe CSS a appliquer 
-        function is_selected (value, params){
+        //comme dans ce cas j'ai besoin d'avoir acces au context de données, je le definie
+        //dans mon prototype
+        //NOTE: permis, mais a eviter!!!!
+        myContext.prototype.is_selected = function(value, params){
                 
                 if (value){
                         
                         //recupere l'index de l'objet
-                        for (i=0;i<myContext.clients.length;i++){
-                                if (myContext.clients[i].id == value.id){
+                        for (i=0;i<this.clients.length;i++){
+                                if (this.clients[i].id == value.id){
                                         //genere la regle css a appliquer
                                         index = i+1;//nth-child commence à 1!
                                         style=".list li:nth-child("+index+"){background:#E3E3E3;}";
@@ -273,7 +276,7 @@ function __replace_uuid(c){
         
         
         <h3>Une simple liste de clients:</h3>
-        <ul class="list">{binding from:clients item_presenter:client_item_presenter}</ul>
+        <ul class="list">{binding from:clients presenter:client_item_presenter}</ul>
         <div>{binding from:selected presenter:client_formulaire}</div>
         <a href="#" data-binded-click="{binding command:add_client}">Creer un nouveau client...</a><br/>
         
@@ -296,10 +299,10 @@ function __replace_uuid(c){
         
         <h4>datalist...</h4>
         <input type="text" data-binded-value="{binding from:possible mode:2way fallback:fr}" list="myList"></input>
-        <datalist id="myList">{binding from:possibles item_presenter:datalist_item_presenter}</datalist>
+        <datalist id="myList">{binding from:possibles presenter:datalist_item_presenter}</datalist>
         <span>langue: {binding from:possible}</span>
         <h4>...ou select</h4>
-        <select data-binded-value="{binding from:possible mode:2way}">{binding from:possibles item_presenter:datalist_item_presenter}</select>
+        <select data-binded-value="{binding from:possible mode:2way}">{binding from:possibles presenter:datalist_item_presenter}</select>
         <span>langue: {binding from:possible}</span>
         
         

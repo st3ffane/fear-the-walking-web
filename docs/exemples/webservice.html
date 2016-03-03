@@ -2,9 +2,9 @@
 <head>
   <meta charset="utf-8">
   <title>Test Webservice direct binding</title>
-	<script src="ftw2-min.js"></script>
+	<script src="../../build/ftw2.js"></script>
 	<script>
-        context = {search_txt : "app", count: 5};        
+        function context () {this.search_txt = "app"; this.count= 5;};        
         </script>
 </head>
 <body data-context="context" >
@@ -12,7 +12,7 @@
                 <div data-role="presenter" id="suggestion_query_result">
                         <div>
                                 <b>Nombre de reponses:{binding from:count fallback:'0'}</b>
-                                <ul>{binding from:data item_presenter:suggestions_result}</ul>
+                                <ul>{binding from:data presenter:suggestions_result}</ul>
                         </div>
                         <div data-type="WEBSERVICE_LOADING">
                                 <i>{binding from:message fallback:'Merci de patienter'}</i>

@@ -108,7 +108,42 @@ function getDomPath(elem, root) {
 function check_radio_value(value, params){
         return value ? value == params : null;
 }
+//converter: verifie si une valeur est true/false
+//@param value: la valeur a veriier
+//@param params: un tableau de 2 valeurs possibles si false=>0, true=>1 
+//@return true/false ou params[0] si false, params[1] si true
+function is_true (value, params){
+      var res = value == true;
+      if (params && params.length >= 2) {
+              res = res? params[1] : params[0];
+      }
+      return res;
+}
 
+
+function ftw2_getLocale(){
+         if (navigator.languages != undefined) return navigator.languages[0]; 
+         else return navigator.language;
+}
+//localize un nombre pour affichage
+//@params value: le nombre a localizer
+//@params params: parametres optionels
+//      1: locale: une chaine decrivant la langue a utiliser (defaut: navigator.languages[0])
+//      0: after_dot_count: le nombre de chiffres apres la virgule (defaut: 2)
+//@return string: le nombre localisé
+function localize_number (value, params){
+  //remplace le point par une virgule
+  if (value == null) return "";
+  after = 2;
+  locale = ftw2_getLocale();
+  if(params){
+        after = params[0] || 2;
+        locale = params[1] || locale;
+  }
+  
+  return  value.toLocaleString("fr-FR",{maximumFractionDigits:after, minimumFractionDigits:after});
+
+}
 //helper methode, retire les '' d'une propriete
 //@temp en attendant de faire mieux pour la regex
 //@param value: la string a deshabiller
@@ -122,4 +157,63 @@ function __unstringify(value){
     }
     return value;
 }
+
+
+
+
+//ajoute un listener pour un event
+//@param elem: l'element html qui va recevoir l'ecouteur
+//@param a: l'event a ecouter
+//@param b: la fonction a appeller lors de l'event
+/*
+function addCommandListener(elem,a,b){
+        elem.addEventListener(a,b);//event, function
+
+        //supprimer ca....                      ==============================================> TODO
+	/*if(!elem.eventListenerList) elem.eventListenerList = {};
+	if(!elem.eventListenerList[a]) elem.eventListenerList[a] = [];
+	elem.eventListenerList[a].push(b);*
+}*/
+
+//Supprime un node enfant d'un element html, en profite pour
+//supprimer les listeners d'events
+//@param elem: l'element parent
+//@param child: l'element a supprimer
+function removeChildAndClearEvents(elem, child){
+        elem.removeChild(child);
+	//clear_events(child);
+}
+
+//supprime les ecouteurs d'events des elements html
+//@DEPRECATED
+//@param child: l'element a qui supprimer les ecouteurs (lui et ses enfants)
+function clear_events (child){
+    //uniqument pour lui ou aussi pour les inners????
+	if(child.eventListenerList){
+                var events = null;
+                var j=0;
+		for (key in child.eventListenerList){
+				events = child.eventListenerList[key];
+                                j = events.length;
+                                while (j--){
+					child.removeEventListener(key,events[j] );
+                                        
+                                        if(child._input_binding)child._input_binding=null;
+                                        if(child._cmd_binding)child._cmd_binding=null;
+				}
+			}
+	}
+	if(child.children){
+		//parcours les elements pour virer les events
+                var elem = null;
+                var ci = child.children.length;
+                while(ci--){
+			elem = child.children[ci];
+			clear_events(elem);
+		}
+
+	}
+}
+   
+   
 

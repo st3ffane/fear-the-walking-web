@@ -20,63 +20,6 @@ var BINDINGS = [];      //dictionnaire associant clé de binding a liste d'eleme
 var MODELS = {};	//des binding models a ajouter/supprimer des pages
 
    
-
-//QQS méthodes qui sont appellées a disparaitre dans les prochaines versions
-
-//modifie un peu le html pour gerer les listes d'events
-HTMLElement.prototype._addEventListener = HTMLElement.prototype.addEventListener
-//Ajoute un ecouteur d'event a l'element html
-//@param a: le nom de l'event a ecouter (ex: load, change...)
-//@param b: la methode a executer
-HTMLElement.prototype.addEventListener = function(a,b) {
-    this._addEventListener(a,b);//event, function
-
-	if(!this.eventListenerList) this.eventListenerList = {};
-	if(!this.eventListenerList[a]) this.eventListenerList[a] = [];
-	this.eventListenerList[a].push(b);
-};
-
-HTMLElement.prototype._removeChild = HTMLElement.prototype.removeChild;
-//supprime un element, en profite pour supprimer les ecouteurs d'events
-//@param child: l'element enfant a supprimer
-HTMLElement.prototype.removeChild = function(child){
-
-	this._removeChild(child);
-	clear_events(child);
-}
-//supprime les ecouteurs d'events des elements html
-//@param child: l'element a qui supprimer les ecouteurs (lui et ses enfants)
-function clear_events (child){
-    //uniqument pour lui ou aussi pour les inners????
-	if(child.eventListenerList){
-                var events = null;
-                var j=0;
-		for (key in child.eventListenerList){
-				events = child.eventListenerList[key];
-                                j = events.length;
-                                while (j--){
-					child.removeEventListener(key,events[j] );
-                                        
-                                        if(child._input_binding)child._input_binding=null;
-                                        if(child._cmd_binding)child._cmd_binding=null;
-				}
-			}
-	}
-	if(child.children){
-		//parcours les elements pour virer les events
-                var elem = null;
-                var ci = child.children.length;
-                while(ci--){
-			elem = child.children[ci];
-			clear_events(elem);
-		}
-
-	}
-}
-   
-   
-   
-   
    
    
    
@@ -128,13 +71,10 @@ function __notifyDatasetChanged(context,bindings, key, extra){
                 if(key=='$this' || binding.from == '$this') value = context;//a voir....
                 else{
                         
-                        v_key = binding.from;                        
+                        v_key = binding.from; 
                         if(context!= null && v_key in context){
                                 value = context[v_key];                
                                 
-                        } else {
-                               
-                                //normalement, ici, il faudrait que je fasse quelquechose...
                         }
                 }
                 binding.populate(value, context, extra);
@@ -157,7 +97,7 @@ var __verif_regex__ = new RegExp(/[^\{]*(\{binding[^\}]+\})/g);//verifie si corr
         (?:'[^']+')|(?:\[[\$']?[\$'\w\s,\._;%\-]+(?:,[\$']?[\$'\w\s,\._;%\-]+)*\]) : un tableau de valeurs: ['une phrase',truc,2,$machin]
 
 */
-var __regex__ = new RegExp(/(?:\s+([\w_\-]+):((?:https?:\/\/[^ ]+)|(?:\$\w[\w_\d]+)|(?:'[^']+')|(?:\[[\$']?[\$'\w\s,\._;%\-]+(?:,[\$']?[\$'\w\s,\._;%\-]+)*\])|(?:[^\s\}]+)))/g);//recupere les infos
+var __regex__ = new RegExp(/(?:\s+([\w_\-]+):((?:https?:\/\/[^ ]+)|(?:(?:ftw2:)?\w[\w_\d]+)|(?:\$\w[\w_\d]+)|(?:'[^']+')|(?:\[[\$']?[\$'\w\s,\._;%\-]+(?:,[\$']?[\$'\w\s,\._;%\-]+)*\])|(?:[^\s\}]+)))/g);//recupere les infos
 
 //TODO: finir la partie du tableau
 
@@ -320,7 +260,7 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
                 //si process event, recupere l'element, sinon, get path
                 
                 
-                d_b["_element"]= elem;//le html a binder
+                
                 d_b["root"] = root;//le root de l'element (si necessaire)
                 d_b["path"] = getDomPath(elem, root);//path CSS vers l'element
                 //probleme XPATH: ne dois pas modifier le document!
@@ -359,6 +299,7 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
 
                 //si doit etre utiliser de suite, cree le binding sinon, n'enregistre que les infos
                 if (process_event){
+                        d_b["_element"]= elem;//le html a binder
                         bind = __create_binding_from_infos(d_b);
                         bind.init(CONTEXT);
                 }
@@ -380,13 +321,13 @@ function __create_binding_from_infos(d_b){
         if (d_b["from"].startsWith("http://")==true || d_b["from"].startsWith("https://")==true) return new __webservice_model_binding(d_b);
         return new __model_binding(d_b);
     }
-    if(d_b["item_presenter"] != null){
+    /*if(d_b["item_presenter"] != null){     SUPPRIMER !!!!
         //affichage pour un array!
         d_b.to = "innerHTML";
         d_b.presenter = d_b.item_presenter;
         d_b.item_presenter = null; //Fondre les models et array dans un meme binding???
         return new __array_binding(d_b);
-    }
+    }*/
     if(d_b["command"] != null){
         return new __command_binding(d_b);
     }
@@ -429,7 +370,13 @@ function AppInit(){
         ctx = document.body.getAttribute("data-context");
         if (ctx == null) throw "No context defined!" ;//on verra plus tard!
 
-        CONTEXT = window[ctx];//A MODIFIER: passe plutot le type de l'objet pour le creer moi meme.
+        //si une function, initialise
+        ctx = window[ctx];
+        if (ctx instanceof Function){
+                CONTEXT = new ctx();
+        }
+        else CONTEXT = ctx;//permet toujours de recuperer un objet, pour un site tout simple amateur, c'est suffisant
+        
         if (CONTEXT == null)throw "No context defined!" ;//on verra plus tard!
         
         defineBindObject(CONTEXT);
@@ -438,7 +385,7 @@ function AppInit(){
         //process_update: true/false: indique si est en train de mettre a jour les données
         
         CONTEXT["__process_update"] = false;
-        Object.defineProperty(CONTEXT, "process_update",{
+        ctx.defineBindProperty( "process_update",{
                 get : function(){
                         return this.__process_update;
                 },
@@ -461,7 +408,7 @@ function AppInit(){
         //end_init: si true, initialisations terminées
         //en theorie, modifié 1 seule fois dans l'appli...
         CONTEXT["__end_init"] = false;
-        Object.defineProperty(CONTEXT, "end_init",{
+        ctx.defineBindProperty( "end_init",{
                 get : function(){
                     return this.__end_init;
                 },

@@ -20,13 +20,17 @@ function __model_binding(infos){
         
     if (infos == null) return;
     
-    this.deep = infos.deep;             //binde les proprietes de l'objet??
+    this.deep = infos.deep || true;             //binde les proprietes de l'objet??
     
     __prop_binding.call(this, infos);
     this.presenter = infos.presenter;	//le code html pour l'affichage des donn�es de l'objet
     this.merge = infos.merge;		//@deprecated compliqué a expliquer pour une utilisation tres reduite (voir exemple SVG)
     this.empty = infos.empty;
 
+    this._empty = false;
+    
+    this._child_binding = []; //les bindings générées par ce model
+    this._generated_keys = [];//les clés de ce binding!
     
     //les data-types, met les en cache, de toute facon, il faudra les recuperer...
     //MAIS: recupere tous les types en place du type necessaire uniquement
@@ -70,40 +74,60 @@ function __model_binding(infos){
 __model_binding.prototype = new __prop_binding();
 
 //nettoyage du binding
-__model_binding.prototype._clean = function(root){
+__model_binding.prototype._clean = function(root, child){
+        if (root == null) root = this._element;
+        if (child == undefined) child = root.firstChild;
         
-        if (root.firstChild != null) {
-                var current_keys = root.firstChild._ftw2_keys;
-
+        
+        if (child != null) {
+                
+                //les clés générées par ce model
+                var current_keys = this._generated_keys;
+                
+                
+                //var model_bindings = []; //les bindings de cette vue
+                
+                
+                //("supprime les bindings internes: ");
                 //TODO: supprime les cl�s de BINDINGS[PAGES_ID] cr�es precedement
                 if(current_keys){
-                    
-                    var current = null, cr = null, index = 0, test = null;
-                    
-                                for (var key in current_keys){
-                                        //supprime de la page
-                                        current = current_keys[key];
-                                        var bi = current.length;
-                                        while(current--){
-                                        //for (var bi=0;bi<current.length;bi++){
-                                                cr = current[bi];
-                                                //supprime  le context si existe
-                                                if (cr.context) cr.context= null;
-                                                
-                                                index = BINDINGS[key].indexOf(cr);
+                        //("nbr de bindings a nettoryer:");//(current_keys);
+                        var current = null, cr = null, index = 0, test = null;
+            
+                        for (var key in current_keys){
+                                //supprime de la page
+                                //("suppression de:"+key);
+                                current = current_keys[key];
+                                glob_binding = BINDINGS[key];
+                                
+                                if(!glob_binding) continue;
+                                
+                                var bi = current.length;
+                                //("nbr de bindings: "+bi);
+                                while(bi--){
+                                //for (var bi=0;bi<current.length;bi++){
+                                        cr = current[bi];
+                                        //nettoie au besoin
+                                        //("cleaning");
+                                        cr._clean();
+                                        //supprime  le context si existe
+                                       
+                                        if (cr.context) cr.context= null;
+                                        
+                                        index = BINDINGS[key].indexOf(cr);
 
-                                                test = BINDINGS[key].splice(index,1)[0];
+                                        test = BINDINGS[key].splice(index,1)[0];
+                                        if(BINDINGS[key].length == 0) delete(BINDINGS[key]);
 
-                                                if(BINDINGS[key].length == 0) delete(BINDINGS[key]);
-
-
-                                        }
 
                                 }
-                                this._current_keys ={};//supprime?
-                    
+                                
+
                         }
-            root.removeChild(root.firstChild);
+                }
+            //sauvegarde dans le stack
+            
+            removeChildAndClearEvents(root, child);
         }
 
 }
@@ -113,9 +137,8 @@ __model_binding.prototype._process_fallback = function(){
     
 
         //si value = null, affiche et bind le fallback
-        if (this.fallback == null) {
-                
-            //regarde si a un datatype=fallback
+        //check d'abord le data-type!!!
+        //regarde si a un datatype=fallback
             var p_type =  this.presenter;
             var presenter_type = p_type+"_fallback";
 
@@ -124,17 +147,25 @@ __model_binding.prototype._process_fallback = function(){
 
                 } 
 
-
-        } else {
+                
+                //si ici, pas de data-type=fallback, cherche le fallback normal?
+                
+        if (this.fallback) {
+                
             //affiche le fallback
-            if (this._cache_fallback){
                 //cree un nouveau model avec le fallback
                 //binding du fallback: utilise le context global
                 return this._populate_model(CONTEXT, this.fallback, "fallback", false);
-            }
+            
         }
+        
+        //si ici, pas de fallback, pas de type, renvoie juste une infos simple?
+        return document.createTextNode("");//tostring sur context
 }
 
+
+
+// AFFICHAGE OBJET SIMPLE
 //affiche le contenu du model
 //@param context: l'objet javascript qui servira de context de données
 //@param mroot: element HTML root du presenter (par defaut, recupere this.presenter)
@@ -142,7 +173,11 @@ __model_binding.prototype._process_fallback = function(){
 //@param deep: si doit binder les données du context (par defaut iinfos.deep)
 __model_binding.prototype._populate_model = function(context, mroot,type, deep){
        
+        //probleme, parfois, ne doit pas utiliser le converter...
         defineBindObject(context);
+        //la convertion au besoin
+        //context = this.convert_value (value, parent);
+        var context = this.convert_value (context, mroot);
         
         var model =null
         var bindings = null;
@@ -223,10 +258,11 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
         
         
         for(var key in bindings){
-
+                //("clé:"+key);
 
                 var bd = [];
                 var h=bindings[key].length;
+                //("nbr de bindings: "+h);
                 while(h--){
                         //copie les infos du binding
                         var infos = {};
@@ -243,7 +279,8 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
                         
                         
                         var clone = __create_binding_from_infos(infos);//cree le binding, passe la valeur a binder pour determiner le type
-
+                        //("deep:"+deep_binding);
+                        //(context.__uuid__);
                         if (context.__uuid__ && deep_binding === true){
                                 //gestion du 'alt' ------------------------------------------------
                                 var keys =  this.getBindingKeys(infos);
@@ -251,9 +288,10 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
                                 while(kk--){
                                 //enregistre les bindings
                                     var n_key = keys[kk];
-
+                                    
                                     //si processinput, utilise UUID du contexte globale
                                     var g_key =context.__uuid__+":"+n_key;
+                                    //("clé de binding: "+g_key);
                                     if (g_key in BINDINGS){
                                         //deja connu, ajoute simplement a la liste
                                         BINDINGS[g_key].push(clone);
@@ -262,7 +300,7 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
                                         //inconnu, cree une nouvelle entr�e
                                         BINDINGS[g_key]= [clone] ;
                                     }
-
+                                    
                                     //enregistre pour pouvoir nettoyer plus tard....
                                     if (g_key in current_keys){
                                         //deja connu, ajoute simplement a la liste
@@ -289,18 +327,16 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
         }
 
        
-
-        frag._ftw2_keys = current_keys;
+        //("nbr de clés de bindings global crées: ");
+        //(current_keys);
+        this._generated_keys = current_keys;//enregistre les clés de bindings de ce model uniquement!
         return frag;
     }
     
     
-    
-	
-__model_binding.prototype.populate = function(context, parent, extra){
-	
-        
-        var fragment = document.createDocumentFragment();
+
+__model_binding.prototype.populate_object = function(context, parent, extra, frag){
+        /*var fragment = document.createDocumentFragment();
         var sibling = this._element.nextSibling;
         
         var parent = this._element.parentNode;
@@ -308,11 +344,16 @@ __model_binding.prototype.populate = function(context, parent, extra){
         
         var frag = this._element;
         
-        var context = this.convert_value (context, parent);
+        
+        fragment.appendChild(frag);
+        defineBindObject(context);
+        //la convertion au besoin
+        value = this.convert_value (value, parent);*/
         
         
         this._clean(frag);
 
+        //un objet DOIT tenter de binder l'objet
         if (context == null ){
                 //modif, utilise le fallback comme data-type
                 frag.appendChild(this._process_fallback());
@@ -326,8 +367,348 @@ __model_binding.prototype.populate = function(context, parent, extra){
 
 		
         //replace l'element dans la page
-        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+        //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
 }
 
+  
+//AFFICHAGE ARRAY
+
+__model_binding.prototype.populate_array = function (value, context, extra, frag){
+
+        //definie les actions par defaut (ie: pas d'extras)
+        //recupere l'element et place le dans un fragment pour eviter les reflows
+        /*var fragment = document.createDocumentFragment();
+        var sibling = this._element.nextSibling;
+
+        var parent = this._element.parentNode;
+        var frag = this._element;
+
+
+        fragment.appendChild(frag);//ajoute directement l'element au fragment...
+
+        //si un textnode, supprime
+        if (frag.firstChild && frag.firstChild.nodeType===3) removeChildAndClearEvents(frag,frag.firstChild);//frag.removeChild(frag.firstChild);
+        */
+        defineBindObject(context);
+        //la convertion au besoin
+        //value = this.convert_value (value, parent);
+
+        if (value == null){
+                this._empty = true; //marque empty
+                
+                //si a des childs, supprime les tous
+                while (frag.firstChild) {
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
+                }
+            
+            
+                frag.appendChild(this.process_fallback());
+                
+            
+                //replace l'element dans la page
+                if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                return;
+        }
+        
+        
+        
+        if (value.length == 0){
+                  this._empty = true; //marque empty
+                
+                //si a des childs, supprime les tous
+                while (frag.firstChild) {
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
+                }
+                if (this.empty ){                             
+                    frag.appendChild(this._populate_model(CONTEXT, this.empty, "empty", false));
+                }
+                //replace l'element dans la page
+                if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                return;
+        }
+
+        if (this._empty){
+                //supprime la empty view
+                while (frag.firstChild) {
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
+                }
+                this._empty = false;
+                
+        }
+        
+        //si un extra, modifie les actions...
+        if (extra != null){
+            
+            //suivant l'action (set,push,...) agit au mieux...
+            switch(extra.action){
+                case 'SET':{
+                    //modifie 1 seul element, ie: supprime et remet en place
+                    var ci = extra.index;
+
+                    //nettoie les elements html inutiles si besoin
+                    //this._clean_child(frag.children[ci], frag);
+                    this._clean(frag, frag.children[ci]);
+                    var item = value[ci];
+                    var result = this._populate_item(item);
+                    //result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
+
+                    
+                    var prec = ci == 0 ? frag.firstChild : frag.children[ci-1];
+                    frag.insertBefore(result,prec);
+                    //replace l'element dans la page
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    
+                    return ;
+
+
+                }
+                case 'POP':{
+                    //supprime le  dernier de la listes
+                    //this._clean_child(frag.children[frag.children.length -1], frag);
+                    this._clean(frag, frag.children[frag.children.length -1]);
+                    //replace l'element dans la page
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    return;
+                }
+                case 'PUSH':{
+                    //ajoute a la fin
+                    var count = extra.value
+                    //recupere les counts derniers elements
+                    var  add_childs = [];
+                    var first = value.length - count;
+                    for (var c=value.length-1;c>= first; c--){add_childs.push(value[c]);}
+                    for (var ci=0; ci<add_childs.length;ci++){
+                            
+                        var item = add_childs[ci];
+                        var result = this._populate_item(item);
+                        //result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
+
+                       frag.appendChild(result);
+                    }
+                    //replace l'element dans la page
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    return;
+                }
+                case 'SHIFT':{
+                    //retire le premier element
+                    //this._clean_child(frag.children[0],frag);
+                    this._clean(frag, frag.children[0]);
+                     //replace l'element dans la page
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    return;
+                }
+                case 'UNSHIFT':{
+                    //ajoute en debut de tableau
+                    var count = extra.value
+                    //recupere les counts derniers elements
+                    var add_childs = [];
+                    for (var c=count - 1 ;c>=0; c--){add_childs.push( value[c]);}
+                    for (var ci=0; ci<add_childs.length;ci++){
+                        //doit etre placé???
+                        var item = add_childs[ci];
+                        var result = this._populate_item(item);
+                        //result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
+
+                        frag.insertBefore(result, frag.firstChild);
+                    }
+                    //replace l'element dans la page
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    return;
+                }
+                case 'SPLICE':{
+                    //supprime ET ajoute
+                    var index=extra.index;//probleme, si IE???
+                    var howmany=extra.howmany;
+                    var count = extra.count;
+                    
+                    
+                    for (var ci=index;ci<index+howmany;ci++){
+                            this._clean(frag, frag.children[index]);
+                            //this._clean_child(frag.children[ci],frag);//par defaut, supprime tous les childs de la liste
+                    }
+                    
+
+                    //si doit ajouter en position...
+                    if (count != undefined && count >0){
+                        var add_childs = [];
+                        var prec = frag.children[index];
+                        for (var c=count - 1 ;c>=0; c--){add_childs.push( value[index+c]);}
+                        for (var ci=0; ci<add_childs.length;ci++){
+                            var item = add_childs[ci];
+                            var result = this._populate_item(item);
+                            //result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
+
+                            frag.insertBefore(result, prec);
+                            
+                        }
+
+
+                    }
+                    //replace l'element dans la page
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    return;
+
+                }
+                default: break;
+            }
+        }
+
+
+
+
+        
+        var removeChilds = frag.children ;
+        if (removeChilds==null){
+                removeChilds = [];
+                var childs = frag.childNodes;
+                var end = childs.length;
+                for (i= 0; i< end; i++){
+                      if (childs[i].nodeType != 8 && (childs[i].nodeType != 3 || /\S/.test(childs[i].nodeValue))){
+                              removeChilds.push( childs[i] );
+                              
+                      }
+                }
+        }
+        //nettoie les elements html inutiles si besoin
+        for(var ci=removeChilds.length-1;ci>=0;ci--){
+            //this._clean_child(removeChilds[ci], frag);
+            this._clean(frag, removeChilds[ci]);
+        }
+
+        //ajoute les nouveaux elements
+        for (var ci=0; ci<value.length;ci++){
+            var item = value[ci];
+            var result = this._populate_item(item);
+            frag.appendChild(result);
+        }
+        //affichage des groupes
+
+        this._key_uuid_ = context.__uuid__+":"+this.from;
+        //replace l'element dans la page
+        //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+
+};
+
+
+
+__model_binding.prototype._populate_item = function(context, parent, extra){
     
+        if (context == null ){
+                //modif, utilise le fallback comme data-type
+                return this._process_fallback();
+        }
+
+        //ajoute l'element d'un coup, pas besoin de fragment?
+        var child = this._populate_model(context);//le html generé
+
+        this._key_uuid_ = context.__uuid__+":"+this.from;
+        return child;
+
+}
+
+
+//MODIFICATION: determine au runtime si la data est un tableau (DBArray) ou un objet simple...
+
+__model_binding.prototype.populate = function(value, parent, extra){
+	//probleme, si array, doit faire ca  a chaque item....
+        
+        //defineBindObject(value);
+        
+        var fragment = document.createDocumentFragment();
+        var sibling = this._element.nextSibling;
+
+        var parent = this._element.parentNode;
+        var frag = this._element;
+        //si un textnode, supprime
+        if (frag.firstChild && frag.firstChild.nodeType===3) frag.removeChild(frag.firstChild);
+
+
+        fragment.appendChild(frag);//ajoute directement l'element au fragment...
+
+        
+        //probleme! si deep=false et array, n'est pas detecté!!!
+        if (value && (value.__proto__ == DBArray || value instanceof Array) ) this.populate_array(value,parent,extra,frag);
+        else this.populate_object(value,parent,extra,frag);
+        
+        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+        
+        
+        /*
+        A REMETTRE DANS POPULATE_OBJET ET POPULATE_ARRAY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        value = this.convert_value (value, parent);
+        
+        //2: process fallback et empty
+        
+        //si un textnode, supprime
+        if (frag.firstChild && frag.firstChild.nodeType===3) removeChildAndClearEvents(frag,frag.firstChild);//frag.removeChild(frag.firstChild);
+
+
+
+        if (value == null){
+                this._empty = true; //marque empty
+                
+                //si a des childs, supprime les tous
+                while (frag.firstChild) {
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
+                }
+            
+            
+                if (this.fallback) {
+                    //populate le model fallback
+                    frag.appendChild(this._populate_model(CONTEXT, this.fallback, "fallback", false));
+                }
+            
+                //replace l'element dans la page
+                if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                return;
+        }
+        
+        
+        
+        if (value.length == 0){
+                  this._empty = true; //marque empty
+                
+                //si a des childs, supprime les tous
+                while (frag.firstChild) {
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
+                }
+                if (this.empty ){                             
+                    frag.appendChild(this._populate_model(CONTEXT, this.empty, "empty", false));
+                }
+                //replace l'element dans la page
+                if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                return;
+        }
+
+        if (this._empty){
+                //supprime la empty view
+                while (frag.firstChild) {
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
+                }
+                this._empty = false;
+                
+        }
+        
+        
+        
+        //3: affiche les données
+        //si ici, value!=null
+        
+        
+        //3: si DBArray, populate array, sinon, object
+        
+        
+        
+        if (value.__proto__ == DBArray) this.populate_array(value,parent,extra, frag);
+        else this.populate_object(value, parent, extra, frag);
+        
+        */
+        
+}  
     

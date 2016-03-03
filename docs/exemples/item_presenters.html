@@ -3,16 +3,16 @@
   <meta charset="utf-8">
   <title>Fear the walking web! Demos</title>
 
-	<script src="ftw2-min.js"></script>
+	<script src="../../build/ftw2.js"></script>
 	<script>
         function Client (n,p,s){
                 this.nom = n;
                 this.prenom = p;
                 this.sexe=s;
         };
-        myContext = {  
-                clients : [ new Client("PONTEINS","Stéphane","M"),new Client("MALLOW","Marc","M"), new Client("DALTON","M’a","F")],
-                simple : [1,2,"Bonjour",3.34, undefined],
+        function myContext (){  
+                this.clients = [ new Client("PONTEINS","Stéphane","M"),new Client("MALLOW","Marc","M"), new Client("DALTON","M’a","F")];
+                this.simple = [1,2,"Bonjour",3.34, undefined];
 
         };
         
@@ -43,9 +43,9 @@
                 </div>
         </div>
         <h3>Une simple liste de clients:</h3>
-        <ul>{binding from:clients item_presenter:client_item_presenter}</ul>
+        <ul>{binding from:clients presenter:client_item_presenter}</ul>
         <h3>Une liste de valeurs primitives:</h3>
-        <ul>{binding from:simple item_presenter:simple_item_presenter}</ul>
+        <ul>{binding from:simple presenter:simple_item_presenter}</ul>
 
   
   </body>

@@ -3,7 +3,7 @@
   <meta charset="utf-8">
   <title>Fear the walking web! Demos</title>
 
-	<script src="ftw2-min.js"></script>
+	<script src="../../build/ftw2.js"></script>
 	<script>
         function Client (n,p,s){
                 this.nom = n;
@@ -23,12 +23,12 @@
         SuperClient.prototype.__proto__ = new BonClient();
         
         
-        myContext = {              
-               message : "Désolé, pas d'informations sur ce client!",
-               client1 : new Client("PONTEINS","Stéphane","M"),
-               client2 : new BonClient("PITT","Bébert","M", 3246),
-               client3 : new SuperClient("CHOSE", "Roselyne","F",3255),
-               client4 : null,
+        function myContext() {              
+               this.message = "Désolé, pas d'informations sur ce client";
+               this.client1 = new Client("PONTEINS","Stéphane","M");
+               this.client2 = new BonClient("PITT","Bébert","M", 3246);
+               this.client3 = new SuperClient("CHOSE", "Roselyne","F",3255);
+               this.client4 = null;
                
         };
         

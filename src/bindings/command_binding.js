@@ -15,12 +15,54 @@
   command_binding.js:
 
 */
-
+function CommandBindingElement(){
+        this._cmd_binding = null;
+}
 /*binding d'une commande*/
 function __command_binding(infos){
 
     __prop_binding.call(this, infos);
+    
+    //NOTE: si crée un element a partir d'un model????
+    /*if (this._element){
+            proto = new CommandBindingElement();
+            proto.__proto__ = this._element.__proto__;
+            this._element.__proto__ = proto;
+    }*/
+    var bind = this;
+    this.__process_event = function(evt){
+        
+        if (bind.context == null) return;
+        
+        
+        //recupere le nom de la methode
+        var value = bind.command;
+        if(value == null) value = bind.fallback;
+        value = bind.convert_value (value, bind.context);
+        var params = null;
+        //appel a la methode, passe les données
+        if (bind.command_params!=null){
+            params=[];
 
+
+            for (cpi=0;cpi<bind.command_params.length;cpi++){
+                if (bind.command_params[cpi][0]=="$"){
+                    //recupere le nom de la prop
+                    var prop = bind.command_params[cpi].substr(1);
+
+                    if (prop in bind.context) params.push(bind.context[prop]);//par valeur
+                    else params.push('null');
+                }
+                else params.push(bind.command_params[cpi]);
+            }
+
+        }
+        
+        
+        CONTEXT[value](evt,params);
+    }
+    
+    
     infos.from = this.from = "COMMANDS";
 
     this.context = null;
@@ -65,22 +107,28 @@ __command_binding.prototype.init = function(ctx){
                 
 
             this._element.addEventListener(this.to,this.__process_event);
-            this._element._cmd_binding = this;                                                                                  // memory leaks??????
+            //addCommandListener(this._element, this.to,this.__process_event);
+            this._element._cmd_binding = this;                                                                                  // memory leaks?????? TODO
         }
 };
 __command_binding.prototype.populate = function (value, context, extra){
         this.init(context);
 };
-
+__command_binding.prototype._clean = function(){
+        //supprime le listener
+        
+        this._element.removeEventListener(this.to,this.__process_event );
+}
+/*
 __command_binding.prototype.__process_event = function(evt){
         
-        bind = this._cmd_binding;
+        bind = this._cmd_binding;// PAS BON!
         
         if (bind == null || bind.context == null) return;
         
         
         //recupere le nom de la methode
-        value = bind.command;
+        var value = bind.command;
         if(value == null) value = bind.fallback;
         value = bind.convert_value (value, bind.context);
         params = null;
@@ -92,7 +140,7 @@ __command_binding.prototype.__process_event = function(evt){
             for (cpi=0;cpi<bind.command_params.length;cpi++){
                 if (bind.command_params[cpi][0]=="$"){
                     //recupere le nom de la prop
-                    prop = bind.command_params[cpi].substr(1);
+                    var prop = bind.command_params[cpi].substr(1);
 
                     if (prop in bind.context) params.push(bind.context[prop]);//par valeur
                     else params.push('null');
@@ -101,10 +149,12 @@ __command_binding.prototype.__process_event = function(evt){
             }
 
         }
+        
+        
         CONTEXT[value](evt,params);
 
     
-}
+}*/
     
     
     

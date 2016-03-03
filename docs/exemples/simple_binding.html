@@ -3,19 +3,19 @@
   <meta charset="utf-8">
   <title>Fear the walking web! Demos</title>
 
-	<script src="ftw2-min.js"></script>
+	<script src="../../build/ftw2-min.js"></script>
 	<script>
-        myContext = {
-                app_name:"Stéphane",
-                _invisible_shadow : 12,//invisible pour le framework
-                ma_valeur : 13.387,
+        function myContext (){
+                this.app_name="Stéphane";
+                this._invisible_shadow = 12;//invisible pour le framework
+                this.ma_valeur = 13.387;
         };
         
         //pour pouvoir utiliser la valeur d'invisble_shadow, on crée une property type getter/setter
         //le nom de cette property sera le nom a utiliser pour les bindings
-        Object.defineProperty(myContext,"hello",{
+        myContext.defineBindProperty("hello",{
                 get: function(){return this._invisible_shadow +1;},
-                set:function(val){this._invisible_shadow = val;}
+                set:function(val){console.log(this);this._invisible_shadow = val;}
         });
         
         function localize(value, after_dot_count){
@@ -33,6 +33,6 @@
         <h2>Localisée: {binding from:ma_valeur converter:localize}</h2>
         <h2>localisée aussi: {binding from:ma_valeur converter:localize converter_params:3}</h2>
 
-        <a href="#" onclick="myContext.app_name=null;">Fallback: met le nom a null!</a>
+        <!--a href="#" onclick="myContext.app_name=null;">Fallback: met le nom a null!</a ne marche plus dans la nouvelle version! -->
   </body>
 </html>

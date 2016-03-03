@@ -3,14 +3,14 @@
   <meta charset="utf-8">
   <title>Wolf Of WallStreet</title>
     <link rel="stylesheet" href="wows.css"/>
-	<script src="ftw2-min.js"></script>
+	<script src="../../build/ftw2.js"></script>
 	<script src="wows.js"></script>
 </head>
 <body data-context="wowsContext" >
         <div data-role="presenters">
                 <div data-role="presenter" id='suggestionItem'>
                         <li data-binded-click="{binding command:selectNewStock command_params:$FullInstrument}">
-                                <h3 class="stck_name">{binding from:FriendlyName fallback:'no data'}</h3>
+                                <h3 class="stck_name">{binding from:FriendlyName fallback:'Désolé! pas de datas!!'}</h3>
                                 <h5 class="stck_place">{binding from:AC040 fallback:'no data'}</h5>
                                 
                         </li>
@@ -23,7 +23,7 @@
                 </div>
                 <div data-role="presenter" id="extra_presenter">
                         <ul id="st_infs" class="center_horizontal">
-                                <li><span class="label" >Ouverture</span><span class="datas">{binding from:open converter:localize fallback:--,--}</span></li>
+                                <li><span class="label" >Ouverture</span><span class="datas">{binding from:open converter:ftw2:localize_number fallback:--,--}</span></li>
                                 <li><span class="label">Cloture precedente</span><span class="datas">{binding from:close converter:localize fallback:--,--}</span></li>
                                 <li><span class="label" >Volume</span><span class="datas">{binding from:volume converter:localize fallback:--,--}</span></li>
                                 <li><span class="label" >Volume moyen</span><span class="datas">{binding from:avgVolume converter:localize fallback:--,--}</span></li>
@@ -35,16 +35,16 @@
                         <div>
                                 <div id="infos" class="center_horizontal">
                                         <div class="inline">
-                                                <h2 class="stck_name">{binding from:name fallback:--}</h2><br/>
+                                                <h2 class="stck_name">{binding from:name fallback:'Désolé! pas de datas!!'}</h2><br/>
                                                 <h4 class="stck_place" >{binding from:place fallback:'no data'}</h4>
                                                 <h4 class="stck_place" >({binding from:market fallback:'--'})</h4>
                                         </div>
 
                                         <div id="values">
                                                         <!-- arrow -->
-                                                        <h4 data-binded-class="stck_place {binding from:gain converter:signToColor  fallback:green}">{binding from:gain converter:localize  fallback:'--'}</h4>
-                                                        <h4 data-binded-class="stck_place {binding from:gain converter:signToColor fallback:green}">{binding from:pgain converter:localize fallback:'--'}%</h4>
-                                                        <h1 data-binded-class="stck_value {binding from:gain converter:signToColor}">{binding from:value converter:localize converter_params:3 fallback:'--'}</h1>
+                                                        <h4 data-binded-class="stck_place {binding from:gain converter:signToColor  fallback:green}">{binding from:gain converter:ftw2:localize_number converter_params:4  fallback:'--'}</h4>
+                                                        <h4 data-binded-class="stck_place {binding from:gain converter:signToColor fallback:green}">{binding from:pgain converter:ftw2:localize_number converter_params:3 fallback:'--'}%</h4>
+                                                        <h1 data-binded-class="stck_value {binding from:gain converter:signToColor}">{binding from:value converter:ftw2:localize_number converter_params:3 fallback:'--'}</h1>
                                                
                                         </div>
                                 </div>
@@ -53,7 +53,7 @@
 
     						<polygon fill="#8FD1FD" data-binded-points="{binding from:charts converter:linearise converter_params:$amplitude forceAttr:true}"></polygon>
 
-    						<g>{binding from:amplitude item_presenter:stckref converter:toReferences fallback:nosvgdatas}</g>
+    						<g>{binding from:references alt:amplitude presenter:stckref fallback:nosvgdatas}</g>
 
     						<line id="axey" x1="0" y1="0" x2="0" y2="100%" style="stroke:#a6a6a6;stroke-width:0.2"></line>
     						<line id="axex" x1="0" y1="100%" x2="100%" y2="100%" style="stroke:#a6a6a6;stroke-width:0.1"></line>
@@ -71,7 +71,9 @@
                         </g>
                 </svg>
                 <svg data-role="presenter" id="nosvgdatas">
-                        <text  x="50%" y="50%" text-anchor="middle" font-size="4" fill="#a6a6a6" stroke="#a6a6a6;stroke-width:0.1;">no datas</text>
+                        <g>
+                                <text  x="50%" y="50%" text-anchor="middle" font-size="4" fill="#a6a6a6" stroke="#a6a6a6;stroke-width:0.1;">no datas</text>
+                        </g>
                 </svg>
         </div>
         
@@ -81,7 +83,7 @@
         
         <div id="recherche">
                 <input id='searchinput' type="text" value="{binding from:search_txt mode:2way fallback:'search for stock' event:input}"/>
-                <ul>{binding from:suggestList item_presenter:suggestionItem deep:false empty:noSuggestions}</ul>
+                <ul>{binding from:suggestList presenter:suggestionItem deep:false empty:noSuggestions}</ul>
         </div>
         <div id="stock_infos">
                 <div data-binded-class="{binding from:loading converter:is_loading fallback:spinner}"></div>

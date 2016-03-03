@@ -12,7 +12,7 @@
   Fear the walking web - Flesh & Bones - 0.3 - rewrite!
 
   
-  webservice_binding.js:
+  webservice_binding.js: revoir un peu tout ca...
 
 */
 

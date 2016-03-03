@@ -3,7 +3,7 @@
   <meta charset="utf-8">
   <title>Fear the walking web! Demos</title>
 
-	<script src="ftw2-min.js"></script>
+	<script src="../../build/ftw2.js"></script>
 	<script>
 
 /*
@@ -34,15 +34,15 @@ function __replace_uuid(c){
                 this.prenom = p;
                 this.sexe=s;
         };
-        myContext = {  
+        function myContext (){  
                 //une liste de clients renseignée par défaut
-                clients : [ new Client("MANSON","Marylin","???"),new Client("MALLOW","Marc","M"), new Client("DALTON","M'a","F")],
+                this.clients = [ new Client("MANSON","Marylin","???"),new Client("MALLOW","Marc","M"), new Client("DALTON","M'a","F")];
                 
         };
         //paramètres: evt: l'objet event généré (ici ClickEvent), et les paramètres optionnels
         //comme je ne défini qu'un seul paramètre -id- je le  recupère directement,
         //si j'en avait défini plusieurs, on aurait eu un tableau
-        myContext.delete_client = function(evt, id){
+        myContext.prototype.delete_client = function(evt, id){
                 //recherche l'index du client a supprimer
                 for (i=0;i<this.clients.length;i++){
                         //si l'id est le bon
@@ -53,7 +53,7 @@ function __replace_uuid(c){
                         }
                 }
         }
-        myContext.add_client = function(evt){
+        myContext.prototype.add_client = function(evt){
                 //ajoute un nouveau client à la liste, en dur pour l'instant...
                 //le fait d'appeller push sur mon tableau suffit a mettre a jour l'UI!!!
                 this.clients.push(new Client("NOUVEAU","Client","F"));
@@ -77,7 +77,7 @@ function __replace_uuid(c){
                 
         </div>
         <h3>Une simple liste de clients:</h3>
-        <ul>{binding from:clients item_presenter:client_item_presenter}</ul>
+        <ul>{binding from:clients presenter:client_item_presenter}</ul>
         <a href="#" data-binded-click="{binding command:add_client}">Ajouter un client</a>
         
   

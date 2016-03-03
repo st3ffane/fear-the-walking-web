@@ -32,24 +32,32 @@ objects.js: pour permettre le binding d'objet
 surcharge defineProperty: c'est appell� a etre modifier dans une future version
 */
 
+//test rewrite des objets
 
 
-Object._defineProperty = Object.defineProperty;
-Object.defineProperty = function (cible, name, accessors){
-        //doit modifier le setter pour y mettre le notify...
+
+//defini une methode qui peut etre appell� par le constructeur lui meme pour le data-context 
+//evite les closures
+//Probleme, n'ajoute pas dans l'objet (genre, methode statique) mais dans l'objet Function
+//a cause du this! me manque l'instance!
+Function.prototype.defineBindProperty = function( name, accessors) {
         
-        if (accessors.set){
-                setters = { get: function(){ return accessors.get.call(this)},
-                    set: function(v){
-                            
-                            
+  // enrobe le setter
+  if(accessors.set) {
+        setters = {     get: function(){ return accessors.get.call(this)},//le getter, obligatoire
+                        set: function(v){              
+
+                            //("Hello setter!");
+                            //(this);
+                            //(this.__uuid__);
                             accessors.set.call(this,v);
                             //met a jour les bindings....
 				//passe l'UUID de l'objet pour retrouver avec la cl?
 				//note, context itou?
 				//notifyDatasetChanged(this.__uuid__+":"+obj_k);
-                                
+                                //OU: creer une classe particuliere?
                                 if (this.__uuid__){
+                                        //("has uuid");
                                         var key = this.__uuid__+":"+name;
                                         var bindings = BINDINGS;
                                         if (key in bindings) {
@@ -58,16 +66,21 @@ Object.defineProperty = function (cible, name, accessors){
                                 }
                                 
 				
-                        }
-                };
-                Object._defineProperty(cible, name, setters);
-        }
-        else {
-                
-                Object._defineProperty(cible, name, accessors);
-        }
-        
-}
+                        },
+                        enumerable: accessors.enumerable,
+                        //writable: accessors.writable
+        };
+        Object.defineProperty(this.prototype, name, setters);
+  }
+  else
+  {
+          //cree un getter/setter normalement
+          Object.defineProperty(this.prototype, name, accessors);
+  }
+  
+  
+};
+
 
 //permet de creer le necessaire pour la liaison de donn�e  (ie: property et notify)
 //@param obj: le plain object javascript a rendre 'bindable'
@@ -88,6 +101,7 @@ var defineBindObject = function(obj){
 
 
 	//cree la property de marquage
+        //pour array et objet, idem
 	var uuid = generateUUID();
 
 	Object.defineProperty(obj, '__uuid__',{value:uuid , enumerable: false, writable:false});//????? avec le in, pe un probleme?
@@ -130,7 +144,6 @@ var defineBindObject = function(obj){
     if (is_array){
         //("ArrayBinding data: particulier");
         obj.__proto__ = DBArray;//change le prototype!
-
         return;
     }
     else {
@@ -197,9 +210,168 @@ function __define_property(obj, obj_k){
                                 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 				this["__"+obj_k] = value;
+                                if (this.__uuid__){
+                                        var key = this.__uuid__+":"+obj_k;
+                                        var bindings = BINDINGS;
+                                        if (key in bindings) {
+                                                __notifyDatasetChanged(this,bindings[key], key);
+                                        }
+                                }
 			}
 		});
 }
+
+
+
+/*
+//permet de creer le necessaire pour la liaison de donn�e  (ie: property et notify)
+//@param obj: le plain object javascript a rendre 'bindable'
+var defineBindObject = function(obj){
+    if (obj == null) return;
+    var is_array = false;
+
+    //("defining bind object");
+    //("Verify si a un uuid");
+    //if (!('__uuid__' in obj)){
+    if (typeof obj.__uuid__ == "undefined" ) {
+        //("n'a pas d'uuid....");
+        if (Array.isArray(obj) && ""+Object.prototype.toString.call(obj)!="[object String]"){
+            is_array = true;
+        }
+
+        else if (""+Object.prototype.toString.call(obj)!="[object Object]") {
+
+    		return;//deja fait
+    	}
+    } else return;
+
+
+	//cree la property de marquage
+	var uuid = generateUUID();
+        //("Generating UUID for obj");
+        //(obj.__proto__);
+	obj.__proto__.constructor.defineBindProperty( '__uuid__',{value:uuid , enumerable: false, writable:false});//????? avec le in, pe un probleme?
+	obj.__proto__.constructor.defineBindProperty( 'notifyDatasetChanged',{value: function(name, extra){
+		
+				//passe l'UUID de l'objet pour retrouver avec la cl?
+				//note, context itou?
+				//notifyDatasetChanged(this.__uuid__+":"+obj_k);
+				var key = this.__uuid__+":"+name;
+                                //("search for "+key);
+				if (key in BINDINGS) {
+					////("OK");
+                                        //("notify from setter");
+					__notifyDatasetChanged(this,BINDINGS[key], key, extra);
+				}
+	}, enumerable: false, writable:false});
+	//defini des  owners pour l'objet EXPERIMENTAL !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	Object.defineProperty(obj, "__owners__",{value:[], enumerable:false, modifiable:true});
+	//ajoute, supprime un owners
+	obj.AddToOwners = function(owner, prop_name){
+		this.__owners__.push( [owner, prop_name]);//ajoute a la liste
+	};
+	obj.RemoveFormOwners = function(owner, prop_name){
+		if (this.__owners__){
+                        var owi = this.__owners__.length;
+                        while(owi--){
+			//for (owi=0;owi<this.__owners__.length; owi++){
+				var ow = this.__owners__[owi];
+				if (ow[0] == owner && ow[1]==prop_name){
+					this.__owners__.slice(owi,1);//supprime
+					break;//fini
+				}
+			}
+		}
+	};
+
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    //si array, binde de facon particuliere          => Probleme ici, chance le prototype!!!!!!!!
+    if (is_array){
+        //("ArrayBinding data: particulier");
+        obj.__proto__ = DBArray;//change le prototype!
+        return;
+    }
+    else {
+        //un objet normal, binde les property
+        //IE: cree les getters/setters DANS LE PROTOTYPE? (faire un switch de prototype?)
+       
+        
+        
+        /*var keys = Object.keys(obj);
+        var key_count = keys.length;*
+        //while (key_count--){
+        for (var obj_k in obj){
+        //        var obj_k = keys[key_count];
+    		if (!obj.hasOwnProperty(obj_k) || typeof obj[obj_k] == "function" || obj_k.substr(0,1) == '_')continue;
+                
+
+    		//cree le binding, ie, cree une nouvelle property pour l'objet
+    		//non enumerable
+                var old = obj[obj_k];
+
+    		obj.__proto__.constructor.defineBindProperty( "__"+obj_k,{
+    			value : old,
+    			enumerable:false,
+    			writable:true
+    		});
+
+    		//change la property pour mettre en place le notifydatasetchanged
+    		//cree une cl? de la forme className_propName
+
+    		//probleme prop_key change, probleme closure
+    		__define_property(obj, obj_k);
+                //supprime de l'objet lui meme??? sinon, la property cache le setter
+                //uniquement si existe deja????
+                delete obj[obj_k];//ca, ca ne va pas.....                                              ===============> TODO: comment faire pour ne pas delete?????
+                
+                
+           //Si une valeur, binde la valeur: normalement, passe par le setter du prototype!
+            if(obj[obj_k]!= undefined){
+			//("binding de "+obj_k);
+                defineBindObject(obj[obj_k]);
+                if (obj[obj_k]!= undefined && obj[obj_k].AddToOwners)  obj[obj_k].AddToOwners(obj, obj_k);
+            }
+    	}
+        
+        //probleme, les variables de l'objet surchargent les getters/setters, et pas bon...
+    }
+
+
+}
+
+
+
+
+//definie une property pour un objet a lier
+//INTERNAL
+//@param obj: l'instance de l'objet a lier
+//@param obj_k: nom de la property a lier
+function __define_property(obj, obj_k){
+	obj.__proto__.constructor.defineBindProperty(obj_k,{
+			get : function(){
+				return this["__"+obj_k];
+			},
+			set : function(value){
+
+                                //experimental !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                                var old = this["__"+obj_k];
+                                if (value != null ) defineBindObject(value);
+
+
+                                if (old != null && old.RemoveFromOwners) old.RemoveFromOwners(this,obj_k);
+                                if (value!= null && value.AddToOwners) value.AddToOwners(this, obj_k);
+                                // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+				this["__"+obj_k] = value;
+			}
+		});
+}
+*/
+
+
+
+
 
 
         ;/*
@@ -243,6 +415,7 @@ DBArray.push = function(){
 };
 DBArray.splice = function(){
     //ajoute ET supprime
+    
     Array.prototype.splice.apply(this,arguments);
     extra = {action:"SPLICE",index:arguments[0], howmany:arguments[1], count:arguments.length - 2}
     if(this.__owners__){
@@ -387,8 +560,11 @@ __prop_binding.prototype = {
 __prop_binding.prototype.init = function (context){
         //rien ici...
 }
+//nettoyage du binding: rien ici
+__prop_binding.prototype._clean = function (){}
 //Recupere le nom de toutes les property a surveiller pour la mise
 //a jour de ce binding
+//PROBLEME: appel a cette méthode a chaque mise a jour des données, il faudrait mettre le resultat en cache?                  ====> TODO
 //@param infos: les informations de binding
 //@return array: les noms de property a surveiller (from, alts et converter_params)
 __prop_binding.prototype.getBindingKeys = function(infos){
@@ -498,7 +674,14 @@ __prop_binding.prototype.convert_value=function(value, context){
                         converter = this.converter.substr(5);
                         //appel a la methode
                         value = eval(converter)(value,p);
-                } else {   value = window[this.converter](value,p); }
+                } else {
+                        //considere que la methode se trouve en portée globale.
+                        //OU oblige a la creer dans le context de données global?????                                   ==> TODO
+                        
+                        
+                        if (this.converter in CONTEXT && CONTEXT[this.converter] instanceof Function) value = CONTEXT[this.converter](value,p);
+                        else value = window[this.converter](value,p); 
+                }
 	}
         return value;
     }
@@ -646,13 +829,17 @@ function __model_binding(infos){
         
     if (infos == null) return;
     
-    this.deep = infos.deep;             //binde les proprietes de l'objet??
+    this.deep = infos.deep || true;             //binde les proprietes de l'objet??
     
     __prop_binding.call(this, infos);
     this.presenter = infos.presenter;	//le code html pour l'affichage des donn�es de l'objet
     this.merge = infos.merge;		//@deprecated compliqué a expliquer pour une utilisation tres reduite (voir exemple SVG)
     this.empty = infos.empty;
 
+    this._empty = false;
+    
+    this._child_binding = []; //les bindings générées par ce model
+    this._generated_keys = [];//les clés de ce binding!
     
     //les data-types, met les en cache, de toute facon, il faudra les recuperer...
     //MAIS: recupere tous les types en place du type necessaire uniquement
@@ -696,40 +883,60 @@ function __model_binding(infos){
 __model_binding.prototype = new __prop_binding();
 
 //nettoyage du binding
-__model_binding.prototype._clean = function(root){
+__model_binding.prototype._clean = function(root, child){
+        if (root == null) root = this._element;
+        if (child == undefined) child = root.firstChild;
         
-        if (root.firstChild != null) {
-                var current_keys = root.firstChild._ftw2_keys;
-
+        
+        if (child != null) {
+                
+                //les clés générées par ce model
+                var current_keys = this._generated_keys;
+                
+                
+                //var model_bindings = []; //les bindings de cette vue
+                
+                
+                //("supprime les bindings internes: ");
                 //TODO: supprime les cl�s de BINDINGS[PAGES_ID] cr�es precedement
                 if(current_keys){
-                    
-                    var current = null, cr = null, index = 0, test = null;
-                    
-                                for (var key in current_keys){
-                                        //supprime de la page
-                                        current = current_keys[key];
-                                        var bi = current.length;
-                                        while(current--){
-                                        //for (var bi=0;bi<current.length;bi++){
-                                                cr = current[bi];
-                                                //supprime  le context si existe
-                                                if (cr.context) cr.context= null;
-                                                
-                                                index = BINDINGS[key].indexOf(cr);
+                        //("nbr de bindings a nettoryer:");//(current_keys);
+                        var current = null, cr = null, index = 0, test = null;
+            
+                        for (var key in current_keys){
+                                //supprime de la page
+                                //("suppression de:"+key);
+                                current = current_keys[key];
+                                glob_binding = BINDINGS[key];
+                                
+                                if(!glob_binding) continue;
+                                
+                                var bi = current.length;
+                                //("nbr de bindings: "+bi);
+                                while(bi--){
+                                //for (var bi=0;bi<current.length;bi++){
+                                        cr = current[bi];
+                                        //nettoie au besoin
+                                        //("cleaning");
+                                        cr._clean();
+                                        //supprime  le context si existe
+                                       
+                                        if (cr.context) cr.context= null;
+                                        
+                                        index = BINDINGS[key].indexOf(cr);
 
-                                                test = BINDINGS[key].splice(index,1)[0];
+                                        test = BINDINGS[key].splice(index,1)[0];
+                                        if(BINDINGS[key].length == 0) delete(BINDINGS[key]);
 
-                                                if(BINDINGS[key].length == 0) delete(BINDINGS[key]);
-
-
-                                        }
 
                                 }
-                                this._current_keys ={};//supprime?
-                    
+                                
+
                         }
-            root.removeChild(root.firstChild);
+                }
+            //sauvegarde dans le stack
+            
+            removeChildAndClearEvents(root, child);
         }
 
 }
@@ -739,9 +946,8 @@ __model_binding.prototype._process_fallback = function(){
     
 
         //si value = null, affiche et bind le fallback
-        if (this.fallback == null) {
-                
-            //regarde si a un datatype=fallback
+        //check d'abord le data-type!!!
+        //regarde si a un datatype=fallback
             var p_type =  this.presenter;
             var presenter_type = p_type+"_fallback";
 
@@ -750,17 +956,25 @@ __model_binding.prototype._process_fallback = function(){
 
                 } 
 
-
-        } else {
+                
+                //si ici, pas de data-type=fallback, cherche le fallback normal?
+                
+        if (this.fallback) {
+                
             //affiche le fallback
-            if (this._cache_fallback){
                 //cree un nouveau model avec le fallback
                 //binding du fallback: utilise le context global
                 return this._populate_model(CONTEXT, this.fallback, "fallback", false);
-            }
+            
         }
+        
+        //si ici, pas de fallback, pas de type, renvoie juste une infos simple?
+        return document.createTextNode("");//tostring sur context
 }
 
+
+
+// AFFICHAGE OBJET SIMPLE
 //affiche le contenu du model
 //@param context: l'objet javascript qui servira de context de données
 //@param mroot: element HTML root du presenter (par defaut, recupere this.presenter)
@@ -768,7 +982,11 @@ __model_binding.prototype._process_fallback = function(){
 //@param deep: si doit binder les données du context (par defaut iinfos.deep)
 __model_binding.prototype._populate_model = function(context, mroot,type, deep){
        
+        //probleme, parfois, ne doit pas utiliser le converter...
         defineBindObject(context);
+        //la convertion au besoin
+        //context = this.convert_value (value, parent);
+        var context = this.convert_value (context, mroot);
         
         var model =null
         var bindings = null;
@@ -849,10 +1067,11 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
         
         
         for(var key in bindings){
-
+                //("clé:"+key);
 
                 var bd = [];
                 var h=bindings[key].length;
+                //("nbr de bindings: "+h);
                 while(h--){
                         //copie les infos du binding
                         var infos = {};
@@ -869,7 +1088,8 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
                         
                         
                         var clone = __create_binding_from_infos(infos);//cree le binding, passe la valeur a binder pour determiner le type
-
+                        //("deep:"+deep_binding);
+                        //(context.__uuid__);
                         if (context.__uuid__ && deep_binding === true){
                                 //gestion du 'alt' ------------------------------------------------
                                 var keys =  this.getBindingKeys(infos);
@@ -877,9 +1097,10 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
                                 while(kk--){
                                 //enregistre les bindings
                                     var n_key = keys[kk];
-
+                                    
                                     //si processinput, utilise UUID du contexte globale
                                     var g_key =context.__uuid__+":"+n_key;
+                                    //("clé de binding: "+g_key);
                                     if (g_key in BINDINGS){
                                         //deja connu, ajoute simplement a la liste
                                         BINDINGS[g_key].push(clone);
@@ -888,7 +1109,7 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
                                         //inconnu, cree une nouvelle entr�e
                                         BINDINGS[g_key]= [clone] ;
                                     }
-
+                                    
                                     //enregistre pour pouvoir nettoyer plus tard....
                                     if (g_key in current_keys){
                                         //deja connu, ajoute simplement a la liste
@@ -915,18 +1136,16 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
         }
 
        
-
-        frag._ftw2_keys = current_keys;
+        //("nbr de clés de bindings global crées: ");
+        //(current_keys);
+        this._generated_keys = current_keys;//enregistre les clés de bindings de ce model uniquement!
         return frag;
     }
     
     
-    
-	
-__model_binding.prototype.populate = function(context, parent, extra){
-	
-        
-        var fragment = document.createDocumentFragment();
+
+__model_binding.prototype.populate_object = function(context, parent, extra, frag){
+        /*var fragment = document.createDocumentFragment();
         var sibling = this._element.nextSibling;
         
         var parent = this._element.parentNode;
@@ -934,11 +1153,16 @@ __model_binding.prototype.populate = function(context, parent, extra){
         
         var frag = this._element;
         
-        var context = this.convert_value (context, parent);
+        
+        fragment.appendChild(frag);
+        defineBindObject(context);
+        //la convertion au besoin
+        value = this.convert_value (value, parent);*/
         
         
         this._clean(frag);
 
+        //un objet DOIT tenter de binder l'objet
         if (context == null ){
                 //modif, utilise le fallback comme data-type
                 frag.appendChild(this._process_fallback());
@@ -952,90 +1176,17 @@ __model_binding.prototype.populate = function(context, parent, extra){
 
 		
         //replace l'element dans la page
-        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+        //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
 }
-
-    
-    ;//--require model_binding
-
-/*
-  ----------------------------------------------------------------------------
-  "THE BEER-WARE LICENSE" (Revision 42):
-  <steph.ponteins@gmail.com> wrote this file. As long as you retain this notice you
-  can do whatever you want with this stuff. If we meet some day, and you think
-  this stuff is worth it, you can buy me a beer in return.
-  ----------------------------------------------------------------------------
-
-
-  Fear the walking web - Flesh & Bones - 0.3 - rewrite!
 
   
-  array_binding.js:
+//AFFICHAGE ARRAY
 
-*/
-  
-/*binding d'un array*/
-function __array_binding(infos){
-        __model_binding.call(this, infos);
-        this._empty = false;   
-}
-__array_binding.prototype = new __model_binding ();
-
-//@deprecated
-__array_binding.prototype._clear_binding = function(bindings){
-        //nettoie le binding
-        for(key in bindings){
-
-                //pour chq element de l'array
-                //passe en context l'item!
-                __notifyDatasetChanged(null,bindings[key], key);
-        }
-}
-
-/*
-Nettoie le html crée lors d'un precedent binding
-recupere tout et met dans un stack pour reutilisation
-*/
-__array_binding.prototype._clean_child = function(child, root){
-
-        if (child != null) {
-            
-                var current_keys = child._ftw2_keys;//chq model a ses keys!
-
-
-
-                //TODO: supprime les cl�s de BINDINGS[PAGES_ID] cr�es precedement
-                if(current_keys){
-
-                    var model_bindings = [];
-                    for (var key in current_keys){
-                        //supprime de la page
-                        current = current_keys[key];
-                        for (bi=0;bi<current.length;bi++){
-                            cr = current[bi];
-
-                            index = BINDINGS[key].indexOf(cr);
-
-                            test = BINDINGS[key].splice(index,1)[0];
-
-                            model_bindings.push(test);//supprime des bindings
-                            if(BINDINGS[key].length == 0) delete(BINDINGS[key]);
-
-                        }
-
-                    }
-                }
-
-            //de toute facon, remove child!
-            root.removeChild(child);
-        }
-}
-__array_binding.prototype.populate = function (value, context, extra){
+__model_binding.prototype.populate_array = function (value, context, extra, frag){
 
         //definie les actions par defaut (ie: pas d'extras)
-
         //recupere l'element et place le dans un fragment pour eviter les reflows
-        var fragment = document.createDocumentFragment();
+        /*var fragment = document.createDocumentFragment();
         var sibling = this._element.nextSibling;
 
         var parent = this._element.parentNode;
@@ -1045,25 +1196,24 @@ __array_binding.prototype.populate = function (value, context, extra){
         fragment.appendChild(frag);//ajoute directement l'element au fragment...
 
         //si un textnode, supprime
-        if (frag.firstChild && frag.firstChild.nodeType===3) frag.removeChild(frag.firstChild);
-
-
-
-
-        var value = this.convert_value (value, context);
+        if (frag.firstChild && frag.firstChild.nodeType===3) removeChildAndClearEvents(frag,frag.firstChild);//frag.removeChild(frag.firstChild);
+        */
+        defineBindObject(context);
+        //la convertion au besoin
+        //value = this.convert_value (value, parent);
 
         if (value == null){
                 this._empty = true; //marque empty
                 
                 //si a des childs, supprime les tous
                 while (frag.firstChild) {
-                        frag.removeChild(frag.firstChild);
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
                 }
             
             
-                if (this.fallback) {
-                    frag.appendChild(this._populate_model(CONTEXT, this.fallback, "fallback", false));
-                }
+                frag.appendChild(this.process_fallback());
+                
             
                 //replace l'element dans la page
                 if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
@@ -1077,7 +1227,8 @@ __array_binding.prototype.populate = function (value, context, extra){
                 
                 //si a des childs, supprime les tous
                 while (frag.firstChild) {
-                        frag.removeChild(frag.firstChild);
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
                 }
                 if (this.empty ){                             
                     frag.appendChild(this._populate_model(CONTEXT, this.empty, "empty", false));
@@ -1090,12 +1241,12 @@ __array_binding.prototype.populate = function (value, context, extra){
         if (this._empty){
                 //supprime la empty view
                 while (frag.firstChild) {
-                        frag.removeChild(frag.firstChild);
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
                 }
                 this._empty = false;
                 
         }
-
         
         //si un extra, modifie les actions...
         if (extra != null){
@@ -1107,26 +1258,28 @@ __array_binding.prototype.populate = function (value, context, extra){
                     var ci = extra.index;
 
                     //nettoie les elements html inutiles si besoin
-                    this._clean_child(frag.children[ci], frag);
+                    //this._clean_child(frag.children[ci], frag);
+                    this._clean(frag, frag.children[ci]);
                     var item = value[ci];
                     var result = this._populate_item(item);
-                    result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
+                    //result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
 
                     
                     var prec = ci == 0 ? frag.firstChild : frag.children[ci-1];
                     frag.insertBefore(result,prec);
                     //replace l'element dans la page
-                    if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     
-                    return;
+                    return ;
 
 
                 }
                 case 'POP':{
                     //supprime le  dernier de la listes
-                    this._clean_child(frag.children[frag.children.length -1], frag);
+                    //this._clean_child(frag.children[frag.children.length -1], frag);
+                    this._clean(frag, frag.children[frag.children.length -1]);
                     //replace l'element dans la page
-                    if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
                 }
                 case 'PUSH':{
@@ -1140,19 +1293,20 @@ __array_binding.prototype.populate = function (value, context, extra){
                             
                         var item = add_childs[ci];
                         var result = this._populate_item(item);
-                        result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
+                        //result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
 
                        frag.appendChild(result);
                     }
                     //replace l'element dans la page
-                    if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
                 }
                 case 'SHIFT':{
                     //retire le premier element
-                    this._clean_child(frag.children[0],frag);
+                    //this._clean_child(frag.children[0],frag);
+                    this._clean(frag, frag.children[0]);
                      //replace l'element dans la page
-                    if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
                 }
                 case 'UNSHIFT':{
@@ -1165,21 +1319,25 @@ __array_binding.prototype.populate = function (value, context, extra){
                         //doit etre placé???
                         var item = add_childs[ci];
                         var result = this._populate_item(item);
-                        result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
+                        //result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
 
                         frag.insertBefore(result, frag.firstChild);
                     }
                     //replace l'element dans la page
-                    if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
                 }
                 case 'SPLICE':{
                     //supprime ET ajoute
-                    var index=extra.index;
+                    var index=extra.index;//probleme, si IE???
                     var howmany=extra.howmany;
                     var count = extra.count;
-                    for (var ci=index;ci<index+howmany;ci++)this._clean_child(frag.children[ci],frag);//par defaut, supprime tous les childs de la liste
-
+                    
+                    
+                    for (var ci=index;ci<index+howmany;ci++){
+                            this._clean(frag, frag.children[index]);
+                            //this._clean_child(frag.children[ci],frag);//par defaut, supprime tous les childs de la liste
+                    }
                     
 
                     //si doit ajouter en position...
@@ -1190,7 +1348,7 @@ __array_binding.prototype.populate = function (value, context, extra){
                         for (var ci=0; ci<add_childs.length;ci++){
                             var item = add_childs[ci];
                             var result = this._populate_item(item);
-                            result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
+                            //result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
 
                             frag.insertBefore(result, prec);
                             
@@ -1199,7 +1357,7 @@ __array_binding.prototype.populate = function (value, context, extra){
 
                     }
                     //replace l'element dans la page
-                    if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                    //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
 
                 }
@@ -1224,12 +1382,10 @@ __array_binding.prototype.populate = function (value, context, extra){
                 }
         }
         //nettoie les elements html inutiles si besoin
-
         for(var ci=removeChilds.length-1;ci>=0;ci--){
-            this._clean_child(removeChilds[ci], frag);
-
+            //this._clean_child(removeChilds[ci], frag);
+            this._clean(frag, removeChilds[ci]);
         }
-
 
         //ajoute les nouveaux elements
         for (var ci=0; ci<value.length;ci++){
@@ -1241,17 +1397,17 @@ __array_binding.prototype.populate = function (value, context, extra){
 
         this._key_uuid_ = context.__uuid__+":"+this.from;
         //replace l'element dans la page
-        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+        //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
 
 };
 
 
 
-__array_binding.prototype._populate_item = function(context, parent, extra){
+__model_binding.prototype._populate_item = function(context, parent, extra){
     
         if (context == null ){
                 //modif, utilise le fallback comme data-type
-                return this._process_fallback
+                return this._process_fallback();
         }
 
         //ajoute l'element d'un coup, pas besoin de fragment?
@@ -1262,24 +1418,109 @@ __array_binding.prototype._populate_item = function(context, parent, extra){
 
 }
 
-//utilitaire: permet de trier les elements d'une liste
-//@param arr: le tableau dans lequel mettre l'element
-//@param item: l'element a inserer dans le tableau
-//@param o_b : nom de la property de l'element a utiliser comme comparateur
-//NOTE: si o_b se modifie, doit modifier l'affichage du tableau: modif getKeysBinding
-function __array_insert_order (arr, item, o_b){
 
-	for (li=0;li<arr.length;li++){
-		pitem = arr[li];
-		if (item[o_b] < pitem[o_b]){
-			//ajoute ici
-			arr.splice(li,0, item);
-			return;//fini
-		}
-	}
-	//ajoute a la fin
-	arr.push(item);
-};//--require property_binding
+//MODIFICATION: determine au runtime si la data est un tableau (DBArray) ou un objet simple...
+
+__model_binding.prototype.populate = function(value, parent, extra){
+	//probleme, si array, doit faire ca  a chaque item....
+        
+        //defineBindObject(value);
+        
+        var fragment = document.createDocumentFragment();
+        var sibling = this._element.nextSibling;
+
+        var parent = this._element.parentNode;
+        var frag = this._element;
+        //si un textnode, supprime
+        if (frag.firstChild && frag.firstChild.nodeType===3) frag.removeChild(frag.firstChild);
+
+
+        fragment.appendChild(frag);//ajoute directement l'element au fragment...
+
+        
+        //probleme! si deep=false et array, n'est pas detecté!!!
+        if (value && (value.__proto__ == DBArray || value instanceof Array) ) this.populate_array(value,parent,extra,frag);
+        else this.populate_object(value,parent,extra,frag);
+        
+        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+        
+        
+        /*
+        A REMETTRE DANS POPULATE_OBJET ET POPULATE_ARRAY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        value = this.convert_value (value, parent);
+        
+        //2: process fallback et empty
+        
+        //si un textnode, supprime
+        if (frag.firstChild && frag.firstChild.nodeType===3) removeChildAndClearEvents(frag,frag.firstChild);//frag.removeChild(frag.firstChild);
+
+
+
+        if (value == null){
+                this._empty = true; //marque empty
+                
+                //si a des childs, supprime les tous
+                while (frag.firstChild) {
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
+                }
+            
+            
+                if (this.fallback) {
+                    //populate le model fallback
+                    frag.appendChild(this._populate_model(CONTEXT, this.fallback, "fallback", false));
+                }
+            
+                //replace l'element dans la page
+                if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                return;
+        }
+        
+        
+        
+        if (value.length == 0){
+                  this._empty = true; //marque empty
+                
+                //si a des childs, supprime les tous
+                while (frag.firstChild) {
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
+                }
+                if (this.empty ){                             
+                    frag.appendChild(this._populate_model(CONTEXT, this.empty, "empty", false));
+                }
+                //replace l'element dans la page
+                if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                return;
+        }
+
+        if (this._empty){
+                //supprime la empty view
+                while (frag.firstChild) {
+                        //frag.removeChild(frag.firstChild);
+                        removeChildAndClearEvents(frag,frag.firstChild);
+                }
+                this._empty = false;
+                
+        }
+        
+        
+        
+        //3: affiche les données
+        //si ici, value!=null
+        
+        
+        //3: si DBArray, populate array, sinon, object
+        
+        
+        
+        if (value.__proto__ == DBArray) this.populate_array(value,parent,extra, frag);
+        else this.populate_object(value, parent, extra, frag);
+        
+        */
+        
+}  
+    ;//--require property_binding
 
 /*
   ----------------------------------------------------------------------------
@@ -1296,12 +1537,54 @@ function __array_insert_order (arr, item, o_b){
   command_binding.js:
 
 */
-
+function CommandBindingElement(){
+        this._cmd_binding = null;
+}
 /*binding d'une commande*/
 function __command_binding(infos){
 
     __prop_binding.call(this, infos);
+    
+    //NOTE: si crée un element a partir d'un model????
+    /*if (this._element){
+            proto = new CommandBindingElement();
+            proto.__proto__ = this._element.__proto__;
+            this._element.__proto__ = proto;
+    }*/
+    var bind = this;
+    this.__process_event = function(evt){
+        
+        if (bind.context == null) return;
+        
+        
+        //recupere le nom de la methode
+        var value = bind.command;
+        if(value == null) value = bind.fallback;
+        value = bind.convert_value (value, bind.context);
+        var params = null;
+        //appel a la methode, passe les données
+        if (bind.command_params!=null){
+            params=[];
 
+
+            for (cpi=0;cpi<bind.command_params.length;cpi++){
+                if (bind.command_params[cpi][0]=="$"){
+                    //recupere le nom de la prop
+                    var prop = bind.command_params[cpi].substr(1);
+
+                    if (prop in bind.context) params.push(bind.context[prop]);//par valeur
+                    else params.push('null');
+                }
+                else params.push(bind.command_params[cpi]);
+            }
+
+        }
+        
+        
+        CONTEXT[value](evt,params);
+    }
+    
+    
     infos.from = this.from = "COMMANDS";
 
     this.context = null;
@@ -1346,22 +1629,28 @@ __command_binding.prototype.init = function(ctx){
                 
 
             this._element.addEventListener(this.to,this.__process_event);
-            this._element._cmd_binding = this;                                                                                  // memory leaks??????
+            //addCommandListener(this._element, this.to,this.__process_event);
+            this._element._cmd_binding = this;                                                                                  // memory leaks?????? TODO
         }
 };
 __command_binding.prototype.populate = function (value, context, extra){
         this.init(context);
 };
-
+__command_binding.prototype._clean = function(){
+        //supprime le listener
+        
+        this._element.removeEventListener(this.to,this.__process_event );
+}
+/*
 __command_binding.prototype.__process_event = function(evt){
         
-        bind = this._cmd_binding;
+        bind = this._cmd_binding;// PAS BON!
         
         if (bind == null || bind.context == null) return;
         
         
         //recupere le nom de la methode
-        value = bind.command;
+        var value = bind.command;
         if(value == null) value = bind.fallback;
         value = bind.convert_value (value, bind.context);
         params = null;
@@ -1373,7 +1662,7 @@ __command_binding.prototype.__process_event = function(evt){
             for (cpi=0;cpi<bind.command_params.length;cpi++){
                 if (bind.command_params[cpi][0]=="$"){
                     //recupere le nom de la prop
-                    prop = bind.command_params[cpi].substr(1);
+                    var prop = bind.command_params[cpi].substr(1);
 
                     if (prop in bind.context) params.push(bind.context[prop]);//par valeur
                     else params.push('null');
@@ -1382,10 +1671,12 @@ __command_binding.prototype.__process_event = function(evt){
             }
 
         }
+        
+        
         CONTEXT[value](evt,params);
 
     
-}
+}*/
     
     
     ;//--require property_binding
@@ -1405,39 +1696,26 @@ __command_binding.prototype.__process_event = function(evt){
   input_binding.js: j'ai un gros probleme de closure ici...
 
 */
+
+function InputBindingElement(){
+        //definie une prop assez important pour mon code ici
+        this._input_binding = null;
+}
   
 /*binding d'un element de formulaire (input?)*/
 function __input_binding(infos){
 	__prop_binding.call(this, infos);
-	this._pass = false;					//pour firefox mobile!
-        this.return_value = infos.return_value;                 //force a retourner la propriete "value" de l'input
-        
-        
-       	this._event =infos.event == null ? 'change' : infos.event;//qd envoyer les infos de changement
-	//par defaut, sur le lost focus/enter ?
-	
-        //dans le cas ou le binding se trouve dans la page directement, lie le context global
-        if (infos.process_event){
-                //forcement le context global
-                this.init(CONTEXT);
-        }
-}
+        //un input, doit modifier le prototype
+        /*if (this._element){
+                proto = new InputBindingElement();
+                proto.__proto__ = this._element.__proto__;
+                this._element.__proto__ = proto;
+        }*/
+        var bind = this;
+        this.on_process_event = function(evt){
 
-
-
-
-__input_binding.prototype=new __prop_binding( );
-
-__input_binding.prototype.init = function(context){
-                this._element.addEventListener(this._event, this.on_process_event);
-                this.context = context;//enregistre le context de donn�es pour plus tard....
-		//penser a nettoyer ca plus tard...
-                this._element._input_binding = this;
-        }
-__input_binding.prototype.on_process_event = function(evt){
-
-                var bind = this._input_binding;
-                if(bind == null || bind.context == null) return;
+                //var bind = this._input_binding;
+                if( bind.context == null) return;
                 
                 
 		var value = bind.return_value === true ? this.value : this[bind.to];
@@ -1448,6 +1726,7 @@ __input_binding.prototype.on_process_event = function(evt){
                 
                 
 		try{
+                        
 			bind.mirror(value);//appel a methode mirror de l'event, ie evite le notify
 			this.setCustomValidity("");
                         
@@ -1471,6 +1750,7 @@ __input_binding.prototype.on_process_event = function(evt){
                                                 bind._element[bind.to] = value;
                                                                 
                                                 //supprime le message d'erreur, probleme, doit attendre un peu...
+                                                //une autre closure inutile?
                                                 window.setTimeout(function(){
                                                                 bind._element.setCustomValidity("");
                                                         },2000);
@@ -1513,6 +1793,120 @@ __input_binding.prototype.on_process_event = function(evt){
                         }
 		}
 };
+        
+        
+        
+	this._pass = false;					//pour firefox mobile!
+        this.return_value = infos.return_value;                 //force a retourner la propriete "value" de l'input
+        
+        
+       	this._event =infos.event == null ? 'change' : infos.event;//qd envoyer les infos de changement
+	//par defaut, sur le lost focus/enter ?
+	
+        //dans le cas ou le binding se trouve dans la page directement, lie le context global
+        if (infos.process_event){
+                //forcement le context global
+                this.init(CONTEXT);
+        }
+}
+
+
+
+
+__input_binding.prototype=new __prop_binding( );
+
+__input_binding.prototype.init = function(context){
+                this._element.addEventListener(this._event, this.on_process_event);
+                //addCommandListener(this._element, this._event, this.on_process_event);
+                this.context = context;//enregistre le context de donn�es pour plus tard....
+		//penser a nettoyer ca plus tard...
+                this._element._input_binding = this;//il faudrait eviter de stocker des infos dans les elements ==========> TODO
+        }
+__input_binding.prototype._clean = function(){
+        
+        this._element.removeEventListener(this._event,this.on_process_event );
+}
+/*
+__input_binding.prototype.on_process_event = function(evt){
+
+                var bind = this._input_binding;
+                if(bind == null || bind.context == null) return;
+                
+                
+		var value = bind.return_value === true ? this.value : this[bind.to];
+                if(value == null || value == undefined || value=="") {
+                    this.placeholder = bind.fallback;
+                    
+                }
+                
+                
+		try{
+			bind.mirror(value);//appel a methode mirror de l'event, ie evite le notify
+			this.setCustomValidity("");
+                        
+		}catch(err){
+			
+			this.setCustomValidity(err.message);
+                        
+                        //si a un formulaire, utilise la validation pour afficher les popups
+                        if (this.form){
+                                if(this.form.reportValidity){
+                                        window.setTimeout(function(){
+                                                //PROBLEME DE CLOSURE ICI: bind
+                                                bind._element.form.reportValidity();//doit empecher le submit normalement et afficher les messages d'erreurs...
+                                                //remet la valeur par defaut, voir si c'est le comportement le plus normal
+                                                var value = bind.convert_value (bind.context[bind.from], bind.context);
+                                                if(value === null || value === undefined || value==="") {
+                                                    bind._element.placeholder = this.fallback;
+                                                    return;
+                                                }
+                                                //met a jour l'UI
+                                                bind._element[bind.to] = value;
+                                                                
+                                                //supprime le message d'erreur, probleme, doit attendre un peu...
+                                                //une autre closure inutile?
+                                                window.setTimeout(function(){
+                                                                bind._element.setCustomValidity("");
+                                                        },2000);
+                                        });
+                                }
+                                else {
+                                        //recupere le bouton submit si existe...
+                                        form = bind._element.form;
+                                        
+                                        for (i=form.length-1;i>=0;i--){
+                                                var input = form[i];
+                                                if (input.getAttribute("type")=="submit") {
+                                                        window.setTimeout(function(){
+                                                                input.click();
+                                                                
+                                                                 //remet la valeur????
+                                                                value = bind.convert_value (bind.context[bind.from], bind.context);
+                                                                if(value === null || value === undefined || value==="") {
+                                                                    bind._element.placeholder = this.fallback;
+                                                                    bind._element.value="";
+                                                                    return;
+                                                                }
+                                                                //met a jour l'UI
+                                                                bind._element[bind.to] = value;
+                                                                
+                                                                //remet le custom validity a null?
+                                                                //supprime le message d'erreur, probleme, doit attendre un peu...
+                                                                window.setTimeout(function(){
+                                                                        bind._element.setCustomValidity("");
+                                                                        //("Remise a zero de la custom validity...");
+                                                                },2000);//laisse le message 1sec
+                                                                
+                                                        }, 20);
+                                                        return;
+                                                }
+                                        }
+                                       
+                                }
+                                
+                        }
+		}
+};*/
 
 
 //met a jour la donnée javascript
@@ -1523,13 +1917,7 @@ __input_binding.prototype.mirror = function(value){
                 ctx[this.from] = value;
 		this._pass=false;
     }
-
-//@deprecated
-__input_binding.prototype.clean = function(){
-		//supprime l'event listener
-		infos._element.removeEventListener(this._event, this.on_process_event);
-	}
-        
+ 
         
         
 __input_binding.prototype.populate = function(value, context, extra){
@@ -1566,7 +1954,7 @@ __input_binding.prototype.populate = function(value, context, extra){
   Fear the walking web - Flesh & Bones - 0.3 - rewrite!
 
   
-  webservice_binding.js:
+  webservice_binding.js: revoir un peu tout ca...
 
 */
 
@@ -1910,7 +2298,42 @@ function getDomPath(elem, root) {
 function check_radio_value(value, params){
         return value ? value == params : null;
 }
+//converter: verifie si une valeur est true/false
+//@param value: la valeur a veriier
+//@param params: un tableau de 2 valeurs possibles si false=>0, true=>1 
+//@return true/false ou params[0] si false, params[1] si true
+function is_true (value, params){
+      var res = value == true;
+      if (params && params.length >= 2) {
+              res = res? params[1] : params[0];
+      }
+      return res;
+}
 
+
+function ftw2_getLocale(){
+         if (navigator.languages != undefined) return navigator.languages[0]; 
+         else return navigator.language;
+}
+//localize un nombre pour affichage
+//@params value: le nombre a localizer
+//@params params: parametres optionels
+//      1: locale: une chaine decrivant la langue a utiliser (defaut: navigator.languages[0])
+//      0: after_dot_count: le nombre de chiffres apres la virgule (defaut: 2)
+//@return string: le nombre localisé
+function localize_number (value, params){
+  //remplace le point par une virgule
+  if (value == null) return "";
+  after = 2;
+  locale = ftw2_getLocale();
+  if(params){
+        after = params[0] || 2;
+        locale = params[1] || locale;
+  }
+  
+  return  value.toLocaleString("fr-FR",{maximumFractionDigits:after, minimumFractionDigits:after});
+
+}
 //helper methode, retire les '' d'une propriete
 //@temp en attendant de faire mieux pour la regex
 //@param value: la string a deshabiller
@@ -1925,53 +2348,34 @@ function __unstringify(value){
     return value;
 }
 
-;/*
-  ----------------------------------------------------------------------------
-  "THE BEER-WARE LICENSE" (Revision 42):
-  <steph.ponteins@gmail.com> wrote this file. As long as you retain this notice you
-  can do whatever you want with this stuff. If we meet some day, and you think
-  this stuff is worth it, you can buy me a beer in return.
-  ----------------------------------------------------------------------------
 
 
-  Fear the walking web - Flesh & Bones - 0.3 - rewrite!
 
-  
-  
+//ajoute un listener pour un event
+//@param elem: l'element html qui va recevoir l'ecouteur
+//@param a: l'event a ecouter
+//@param b: la fonction a appeller lors de l'event
+/*
+function addCommandListener(elem,a,b){
+        elem.addEventListener(a,b);//event, function
 
-*/
+        //supprimer ca....                      ==============================================> TODO
+	/*if(!elem.eventListenerList) elem.eventListenerList = {};
+	if(!elem.eventListenerList[a]) elem.eventListenerList[a] = [];
+	elem.eventListenerList[a].push(b);*
+}*/
 
-
-var CONTEXT = null;     //data context de l'application/page web
-var BINDINGS = [];      //dictionnaire associant clé de binding a liste d'elements a prevenir
-var MODELS = {};	//des binding models a ajouter/supprimer des pages
-
-   
-
-//QQS méthodes qui sont appellées a disparaitre dans les prochaines versions
-
-//modifie un peu le html pour gerer les listes d'events
-HTMLElement.prototype._addEventListener = HTMLElement.prototype.addEventListener
-//Ajoute un ecouteur d'event a l'element html
-//@param a: le nom de l'event a ecouter (ex: load, change...)
-//@param b: la methode a executer
-HTMLElement.prototype.addEventListener = function(a,b) {
-    this._addEventListener(a,b);//event, function
-
-	if(!this.eventListenerList) this.eventListenerList = {};
-	if(!this.eventListenerList[a]) this.eventListenerList[a] = [];
-	this.eventListenerList[a].push(b);
-};
-
-HTMLElement.prototype._removeChild = HTMLElement.prototype.removeChild;
-//supprime un element, en profite pour supprimer les ecouteurs d'events
-//@param child: l'element enfant a supprimer
-HTMLElement.prototype.removeChild = function(child){
-
-	this._removeChild(child);
-	clear_events(child);
+//Supprime un node enfant d'un element html, en profite pour
+//supprimer les listeners d'events
+//@param elem: l'element parent
+//@param child: l'element a supprimer
+function removeChildAndClearEvents(elem, child){
+        elem.removeChild(child);
+	//clear_events(child);
 }
+
 //supprime les ecouteurs d'events des elements html
+//@DEPRECATED
 //@param child: l'element a qui supprimer les ecouteurs (lui et ses enfants)
 function clear_events (child){
     //uniqument pour lui ou aussi pour les inners????
@@ -2002,7 +2406,28 @@ function clear_events (child){
 }
    
    
-   
+
+;/*
+  ----------------------------------------------------------------------------
+  "THE BEER-WARE LICENSE" (Revision 42):
+  <steph.ponteins@gmail.com> wrote this file. As long as you retain this notice you
+  can do whatever you want with this stuff. If we meet some day, and you think
+  this stuff is worth it, you can buy me a beer in return.
+  ----------------------------------------------------------------------------
+
+
+  Fear the walking web - Flesh & Bones - 0.3 - rewrite!
+
+  
+  
+
+*/
+
+
+var CONTEXT = null;     //data context de l'application/page web
+var BINDINGS = [];      //dictionnaire associant clé de binding a liste d'elements a prevenir
+var MODELS = {};	//des binding models a ajouter/supprimer des pages
+
    
    
    
@@ -2055,13 +2480,10 @@ function __notifyDatasetChanged(context,bindings, key, extra){
                 if(key=='$this' || binding.from == '$this') value = context;//a voir....
                 else{
                         
-                        v_key = binding.from;                        
+                        v_key = binding.from; 
                         if(context!= null && v_key in context){
                                 value = context[v_key];                
                                 
-                        } else {
-                               
-                                //normalement, ici, il faudrait que je fasse quelquechose...
                         }
                 }
                 binding.populate(value, context, extra);
@@ -2084,7 +2506,7 @@ var __verif_regex__ = new RegExp(/[^\{]*(\{binding[^\}]+\})/g);//verifie si corr
         (?:'[^']+')|(?:\[[\$']?[\$'\w\s,\._;%\-]+(?:,[\$']?[\$'\w\s,\._;%\-]+)*\]) : un tableau de valeurs: ['une phrase',truc,2,$machin]
 
 */
-var __regex__ = new RegExp(/(?:\s+([\w_\-]+):((?:https?:\/\/[^ ]+)|(?:\$\w[\w_\d]+)|(?:'[^']+')|(?:\[[\$']?[\$'\w\s,\._;%\-]+(?:,[\$']?[\$'\w\s,\._;%\-]+)*\])|(?:[^\s\}]+)))/g);//recupere les infos
+var __regex__ = new RegExp(/(?:\s+([\w_\-]+):((?:https?:\/\/[^ ]+)|(?:(?:ftw2:)?\w[\w_\d]+)|(?:\$\w[\w_\d]+)|(?:'[^']+')|(?:\[[\$']?[\$'\w\s,\._;%\-]+(?:,[\$']?[\$'\w\s,\._;%\-]+)*\])|(?:[^\s\}]+)))/g);//recupere les infos
 
 //TODO: finir la partie du tableau
 
@@ -2247,7 +2669,7 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
                 //si process event, recupere l'element, sinon, get path
                 
                 
-                d_b["_element"]= elem;//le html a binder
+                
                 d_b["root"] = root;//le root de l'element (si necessaire)
                 d_b["path"] = getDomPath(elem, root);//path CSS vers l'element
                 //probleme XPATH: ne dois pas modifier le document!
@@ -2286,6 +2708,7 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
 
                 //si doit etre utiliser de suite, cree le binding sinon, n'enregistre que les infos
                 if (process_event){
+                        d_b["_element"]= elem;//le html a binder
                         bind = __create_binding_from_infos(d_b);
                         bind.init(CONTEXT);
                 }
@@ -2307,13 +2730,13 @@ function __create_binding_from_infos(d_b){
         if (d_b["from"].startsWith("http://")==true || d_b["from"].startsWith("https://")==true) return new __webservice_model_binding(d_b);
         return new __model_binding(d_b);
     }
-    if(d_b["item_presenter"] != null){
+    /*if(d_b["item_presenter"] != null){     SUPPRIMER !!!!
         //affichage pour un array!
         d_b.to = "innerHTML";
         d_b.presenter = d_b.item_presenter;
         d_b.item_presenter = null; //Fondre les models et array dans un meme binding???
         return new __array_binding(d_b);
-    }
+    }*/
     if(d_b["command"] != null){
         return new __command_binding(d_b);
     }
@@ -2356,7 +2779,13 @@ function AppInit(){
         ctx = document.body.getAttribute("data-context");
         if (ctx == null) throw "No context defined!" ;//on verra plus tard!
 
-        CONTEXT = window[ctx];//A MODIFIER: passe plutot le type de l'objet pour le creer moi meme.
+        //si une function, initialise
+        ctx = window[ctx];
+        if (ctx instanceof Function){
+                CONTEXT = new ctx();
+        }
+        else CONTEXT = ctx;//permet toujours de recuperer un objet, pour un site tout simple amateur, c'est suffisant
+        
         if (CONTEXT == null)throw "No context defined!" ;//on verra plus tard!
         
         defineBindObject(CONTEXT);
@@ -2365,7 +2794,7 @@ function AppInit(){
         //process_update: true/false: indique si est en train de mettre a jour les données
         
         CONTEXT["__process_update"] = false;
-        Object.defineProperty(CONTEXT, "process_update",{
+        ctx.defineBindProperty( "process_update",{
                 get : function(){
                         return this.__process_update;
                 },
@@ -2388,7 +2817,7 @@ function AppInit(){
         //end_init: si true, initialisations terminées
         //en theorie, modifié 1 seule fois dans l'appli...
         CONTEXT["__end_init"] = false;
-        Object.defineProperty(CONTEXT, "end_init",{
+        ctx.defineBindProperty( "end_init",{
                 get : function(){
                     return this.__end_init;
                 },

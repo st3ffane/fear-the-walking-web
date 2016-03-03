@@ -39,6 +39,7 @@ DBArray.push = function(){
 };
 DBArray.splice = function(){
     //ajoute ET supprime
+    
     Array.prototype.splice.apply(this,arguments);
     extra = {action:"SPLICE",index:arguments[0], howmany:arguments[1], count:arguments.length - 2}
     if(this.__owners__){
