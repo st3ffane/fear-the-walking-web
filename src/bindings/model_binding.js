@@ -12,7 +12,7 @@
   Fear the walking web - Flesh & Bones - 0.3 - rewrite!
 
   
-  model_binding.js:
+todo: systeme de recyclage de vues
 
 */
 
@@ -407,7 +407,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
                 
             
                 //replace l'element dans la page
-                if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                 return;
         }
         
@@ -425,7 +425,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
                     frag.appendChild(this._populate_model(CONTEXT, this.empty, "empty", false));
                 }
                 //replace l'element dans la page
-                if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                 return;
         }
 

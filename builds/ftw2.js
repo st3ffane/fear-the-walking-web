@@ -821,7 +821,7 @@ __attr_binding.prototype.populate = function(value, context, extra){
   Fear the walking web - Flesh & Bones - 0.3 - rewrite!
 
   
-  model_binding.js:
+todo: systeme de recyclage de vues
 
 */
 
@@ -1216,7 +1216,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
                 
             
                 //replace l'element dans la page
-                if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                 return;
         }
         
@@ -1234,7 +1234,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
                     frag.appendChild(this._populate_model(CONTEXT, this.empty, "empty", false));
                 }
                 //replace l'element dans la page
-                if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+                //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                 return;
         }
 
@@ -2436,7 +2436,9 @@ var MODELS = {};	//des binding models a ajouter/supprimer des pages
 /*permet de mettre a jour l'ui lorsqque les datas ont chang�es
 @param key: le nom de la property qui a chang�e ou null pour mettre a jour toute la page
 @args: parametres optinnels ou particulier a un type de binding*/
-//@private
+//TODO: eviter de faire des reflows pour chaque modification
+//IE: si une clé de binding a plusieurs binding associé, bash = documentfragment????
+//2: Bash complet si key == null
 function notifyDatasetChanged(key, extra){
 
         //contexte a prendre en compte////
@@ -2773,7 +2775,7 @@ function __create_binding_from_infos(d_b){
 
 
 // Intialisation des bindings dans la page ----------------------------------------------------------------------------------
-
+//TODO: met en cache les divs des presenters pour recuperation plus rapide apres...
 function AppInit(){
         
         ctx = document.body.getAttribute("data-context");
