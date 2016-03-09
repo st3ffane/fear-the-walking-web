@@ -91,20 +91,20 @@ __model_binding.prototype._clean = function(root, child, index){
         
         if (child != null) {
                 var type = child._ftw2_type;//le type de données stockées dans l'element
-                console.log("type de donnée a recycler:"+type);
+                //("type de donnée a recycler:"+type);
                 //les clés générées par ce model
                 var current_keys = this._generated_keys.splice(index,1)[0];
                 
                 var model_bindings = {}; //les bindings de cette vue
                 
-                console.log("clean model datas");
-                console.log(current_keys);
+                //("clean model datas");
+                //(current_keys);
                 //TODO: supprime les cl�s de BINDINGS[PAGES_ID] cr�es precedement
                 if(current_keys){
                         var current = null, cr = null, index = 0, test = null;
                         
                         for (var key in current_keys){
-                                console.log(key);//clé type UUID:nom
+                                //(key);//clé type UUID:nom
                                 //si tableau, probleme....
                                 //supprime de la page
                                 current = current_keys[key];
@@ -141,8 +141,8 @@ __model_binding.prototype._clean = function(root, child, index){
             //sauvegarde dans le stack
             removeChildAndClearEvents(root, child);
             var template = MODELS[type];
-            console.log("Enregistre un nouveau recycle pour le type:"+type);
-            console.log(model_bindings);
+            //("Enregistre un nouveau recycle pour le type:"+type);
+            //(model_bindings);
             template.recycle.push( [child, model_bindings ])
         }
 
@@ -290,24 +290,24 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
         }
 
         
-        console.log("populate model: item type: "+this._ftw2_type);
+        //("populate model: item type: "+this._ftw2_type);
         if (recycle.length > 0){
                 //recupere la template et bindings associés
-                console.log("Recuperation d'un template dans recycle!");
+                //("Recuperation d'un template dans recycle!");
                 var r = recycle.pop();
                 frag = r[0];
                 bindings = r[1];
-                console.log(bindings);
+                //(bindings);
                 //enregistre les bindings
                 for(var key in bindings){
-                        console.log("clé:"+key);
+                        //("clé:"+key);
 
                         var bd = [];
                         var h=bindings[key].length;
-                        console.log("nbr de bindings: "+h);
+                        //("nbr de bindings: "+h);
                         while(h--){
                                 var clone = bindings[key][h];
-                                console.log(clone);
+                                //(clone);
                                 //copie les infos du binding
                                 /*var infos = {};
                                 var inf = bindings[key][h];
@@ -335,7 +335,7 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
                                             
                                             //si processinput, utilise UUID du contexte globale
                                             var g_key =context.__uuid__+":"+n_key;
-                                            console.log("clé de binding: "+g_key);
+                                            //("clé de binding: "+g_key);
                                             if ( deep_binding === true){
                                                     if (g_key in BINDINGS){
                                                         //deja connu, ajoute simplement a la liste
@@ -364,7 +364,7 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
 
                                 //enregistre le binding
                                 bd.push(clone);
-                                console.log("notify recycle");
+                                //("notify recycle");
                                 clone.init(context);
 
                         }
@@ -374,7 +374,7 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
         }
         else
         {
-                console.log("Creation d'un nouveau model");
+                //("Creation d'un nouveau model");
                 var cpy_model = model.cloneNode(true);
                 frag = cpy_model;
         
@@ -382,7 +382,7 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
                 //cree les bindings necessaires
         
                 for(var key in bindings){
-                        console.log("clé:"+key);
+                        //("clé:"+key);
 
                         var bd = [];
                         var h=bindings[key].length;
@@ -657,7 +657,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
                     
                     
                     for (var ci=index;ci<index+howmany;ci++){
-                            //console.log(frag.children[index]);
+                            ////(frag.children[index]);
                             this._clean(frag, frag.children[index], ci);
                             //this._clean_child(frag.children[ci],frag);//par defaut, supprime tous les childs de la liste
                     }
@@ -690,7 +690,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
 
 
 
-        console.log("remove all array!");
+        //("remove all array!");
         
         var removeChilds = frag.children ;
         if (removeChilds==null){
@@ -734,7 +734,7 @@ __model_binding.prototype._populate_item = function(context, parent, extra){
         }
 
         //ajoute l'element d'un coup, pas besoin de fragment?
-        //console.log("populate item");
+        ////("populate item");
         var child = this._populate_model(context);//le html generé
 
         this._key_uuid_ = context.__uuid__+":"+this.from;
