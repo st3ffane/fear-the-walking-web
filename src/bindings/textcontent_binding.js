@@ -46,6 +46,7 @@ __textContent_binding.prototype.populate = function(value, context, extra){
         //la taille de la datas (pour pouvoir modifier apres)
 
         this._length = value.length;
-        this._element.textContent = start + value + end ;
+        _dom_batch_.dom_batch_set_property(this._element, "textContent", start + value + end );
+        //this._element.textContent = start + value + end ;
         this._key_uuid_ = context.__uuid__+":"+this.from;
     }

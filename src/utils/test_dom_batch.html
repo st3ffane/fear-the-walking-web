@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <title>Test Webworkers et requestanimationframe</title>
+        <script src="dom_batch.js"></script>
+	<script>
+        function simple(evt){
+        
+                //on va tenter un changement de DOM
+                doc = document.getElementById("contener");
+                console.time('simple');
+                for (i=0;i<100;i++){
+                        //ajoute un nouvel eleement a la page
+                        nd = document.createElement("h4");
+                        nd.appendChild(document.createTextNode("bonjour"));
+                        doc.insertBefore(nd, doc.firstChild);
+                       
+                }
+                
+                console.timeEnd("simple");
+        };
+        function dom_frame (evt){
+                console.log(_dom_batch_.infos());
+                doc = document.getElementById("contener");
+                
+                console.time("dom_batch");
+                for (i=0;i<100;i++){
+                        //ajoute un nouvel eleement a la page
+                        nd = document.createElement("h4");
+                        nd.appendChild(document.createTextNode("bonjour"));
+                        _dom_batch_.dom_batch_append_child (doc, nd);
+                        
+                }
+               
+                console.timeEnd("dom_batch");
+                console.log(_dom_batch_.infos());
+        };
+        
+        function remove_simple(evt){
+                doc=document.getElementById("contener");
+                console.time('remove');
+                while(doc.firstChild) doc.removeChild(doc.firstChild);
+                console.timeEnd('remove');
+        }
+        function remove_batch(evt){
+        console.log(_dom_batch_.infos());
+                doc=document.getElementById("contener");
+                console.time("remove_batch");
+                //doit recuperer un tableau
+                
+                var childs =  doc.children;
+                
+                var length = childs.length;
+                var i =0;
+                while(i<length) {
+                        _dom_batch_.dom_batch_removeChild(doc,childs[i]);
+                        i++;
+                }
+                console.timeEnd("remove_batch");
+        console.log(_dom_batch_.infos());
+        }
+        </script>
+</head>
+<body >
+<h3>Test Webworkers et RequestAnimationFrame pour FTW2</h3>
+<span id="cible">la cible de mon worker</span>
+<a href="#" onclick="simple();">Simple append</a>&nbsp;<a href="#" onclick="dom_frame();">dom batch</a><br/>
+<a href="#" onclick="remove_simple();">Simple remove</a>&nbsp;<a href="#" onclick="remove_batch();">remove batch</a>
+<div id="contener"></div>
+</body>
+</html>

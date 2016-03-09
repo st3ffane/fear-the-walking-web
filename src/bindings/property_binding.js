@@ -117,8 +117,9 @@ __prop_binding.prototype.populate = function(value, context, extra){
 
         if(value == null) value = this.fallback;
         value = this.convert_value (value, context);
-
-        this._element[this.to] = value;
+        //modif: utilise dom_batch pour eviter les mises a jour du DOM directement
+        _dom_batch_.dom_batch_set_property(this._element, this.to, value);
+        //this._element[this.to] = value;
         this._key_uuid_ = context.__uuid__+":"+this.from;
 
     }

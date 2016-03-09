@@ -417,7 +417,7 @@ DBArray.splice = function(){
     //ajoute ET supprime
     
     Array.prototype.splice.apply(this,arguments);
-    extra = {action:"SPLICE",index:arguments[0], howmany:arguments[1], count:arguments.length - 2}
+    extra = {action:"SPLICE",index:arguments[0], howmany:arguments[1], count:arguments.length - 2}//
     if(this.__owners__){
 
         for (owi=0;owi<this.__owners__.length; owi++){
@@ -604,8 +604,9 @@ __prop_binding.prototype.populate = function(value, context, extra){
 
         if(value == null) value = this.fallback;
         value = this.convert_value (value, context);
-
-        this._element[this.to] = value;
+        //modif: utilise dom_batch pour eviter les mises a jour du DOM directement
+        _dom_batch_.dom_batch_set_property(this._element, this.to, value);
+        //this._element[this.to] = value;
         this._key_uuid_ = context.__uuid__+":"+this.from;
 
     }
@@ -756,7 +757,8 @@ __textContent_binding.prototype.populate = function(value, context, extra){
         //la taille de la datas (pour pouvoir modifier apres)
 
         this._length = value.length;
-        this._element.textContent = start + value + end ;
+        _dom_batch_.dom_batch_set_property(this._element, "textContent", start + value + end );
+        //this._element.textContent = start + value + end ;
         this._key_uuid_ = context.__uuid__+":"+this.from;
     };//--require property_binding
 
@@ -801,8 +803,10 @@ __attr_binding.prototype.populate = function(value, context, extra){
         //remplace dans la string html, garde ce qu'il y a avant et apres
         var start = this._index == 0 ? "" : dt.substring(0, this._index);
         var end = dt.substring(this._index + this._length);
-
-        this._element.setAttribute(this.to,start + value + end );
+        
+        var finale_value = start + value + end;
+        _dom_batch_.dom_batch_set_attribute(this._element, this.to, finale_value);
+        //this._element.setAttribute(this.to,start + value + end );
         this._key_uuid_ = context.__uuid__+":"+this.from;
     }
 
@@ -840,11 +844,19 @@ function __model_binding(infos){
     
     this._child_binding = []; //les bindings générées par ce model
     this._generated_keys = [];//les clés de ce binding!
+    this._ftw2_type = null;//le type de données actuellement affichée
+    
+    
     
     //les data-types, met les en cache, de toute facon, il faudra les recuperer...
     //MAIS: recupere tous les types en place du type necessaire uniquement
     //a voir....
-    model = document.getElementById(this.presenter);
+    
+    
+    //probleme, chq model_binding correspond a un MODEL[id ou id_type]
+    
+    //a passer dans AppInit!!!!                                 ====> TODO
+    /*model = document.getElementById(this.presenter);
     if (model){
            
         this._root_model = model;
@@ -876,43 +888,44 @@ function __model_binding(infos){
         }
         if (this.fallback) this._cache_types['fallback'] = document.getElementById(this.fallback);
         if (this.empty) this._cache_types['empty'] = document.getElementById(this.empty);
-    }
+    }*/
     
     
 }
 __model_binding.prototype = new __prop_binding();
 
 //nettoyage du binding
-__model_binding.prototype._clean = function(root, child){
+__model_binding.prototype._clean = function(root, child, index){
         if (root == null) root = this._element;
         if (child == undefined) child = root.firstChild;
+        if (index == undefined) index = 0;
+        
         
         
         if (child != null) {
-                
+                var type = child._ftw2_type;//le type de données stockées dans l'element
+                console.log("type de donnée a recycler:"+type);
                 //les clés générées par ce model
-                var current_keys = this._generated_keys;
+                var current_keys = this._generated_keys.splice(index,1)[0];
                 
+                var model_bindings = {}; //les bindings de cette vue
                 
-                //var model_bindings = []; //les bindings de cette vue
-                
-                
-                //("supprime les bindings internes: ");
+                console.log("clean model datas");
+                console.log(current_keys);
                 //TODO: supprime les cl�s de BINDINGS[PAGES_ID] cr�es precedement
                 if(current_keys){
-                        //("nbr de bindings a nettoryer:");//(current_keys);
                         var current = null, cr = null, index = 0, test = null;
-            
+                        
                         for (var key in current_keys){
+                                console.log(key);//clé type UUID:nom
+                                //si tableau, probleme....
                                 //supprime de la page
-                                //("suppression de:"+key);
                                 current = current_keys[key];
                                 glob_binding = BINDINGS[key];
                                 
-                                if(!glob_binding) continue;
+                                /*if(!glob_binding) continue;*/
                                 
                                 var bi = current.length;
-                                //("nbr de bindings: "+bi);
                                 while(bi--){
                                 //for (var bi=0;bi<current.length;bi++){
                                         cr = current[bi];
@@ -922,21 +935,28 @@ __model_binding.prototype._clean = function(root, child){
                                         //supprime  le context si existe
                                        
                                         if (cr.context) cr.context= null;
-                                        
-                                        index = BINDINGS[key].indexOf(cr);
+                                        if(glob_binding && key in glob_binding){
+                                                index = glob_binding[key].indexOf(cr);
 
-                                        test = BINDINGS[key].splice(index,1)[0];
-                                        if(BINDINGS[key].length == 0) delete(BINDINGS[key]);
+                                                test = glob_binding[key].splice(index,1)[0];
+                                                if(glob_binding[key].length == 0) delete(glob_binding[key]);
+                                        }
 
-
+                                        //ajoute au model_bindings pour le recyclage
+                                        var from = cr.from;
+                                        if (!(from in model_bindings)) model_bindings[from]=[];
+                                        model_bindings[from].push(cr);
                                 }
                                 
 
                         }
                 }
             //sauvegarde dans le stack
-            
             removeChildAndClearEvents(root, child);
+            var template = MODELS[type];
+            console.log("Enregistre un nouveau recycle pour le type:"+type);
+            console.log(model_bindings);
+            template.recycle.push( [child, model_bindings ])
         }
 
 }
@@ -982,6 +1002,8 @@ __model_binding.prototype._process_fallback = function(){
 //@param deep: si doit binder les données du context (par defaut iinfos.deep)
 __model_binding.prototype._populate_model = function(context, mroot,type, deep){
        
+       
+        // UTILISER UN STACK DE RECYCLAGE =====================================> TODO
         //probleme, parfois, ne doit pas utiliser le converter...
         defineBindObject(context);
         //la convertion au besoin
@@ -1005,19 +1027,34 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
      
         var bindings = null;
         var model = null;
+        var recycle = null;
 
         var proto = context;
         var item_type = "";
-
+        
+        this._ftw2_type = null;
+        
+        //verifie si existe dans le stack de recyclage...            =======================> TODO
 
         //recherche le model
         if (type=="fallback"){
-                bindings = MODELS[p_type+"_fallback"] ;
-        	model = this._cache_types['fallback'];
+                var md = MODELS[p_type+"_fallback"];
+                if(md){bindings = md.bindings;
+                model = md.template;
+                recycle = md.recycle;
+                this._ftw2_type = p_type+"_fallback";}
+                /*bindings = MODELS[p_type+"_fallback"] ;
+        	model = this._cache_types['fallback'];*/
         }
         else if(type=="empty"){
-                bindings = MODELS[p_type+"_empty"] ;
-        	model = this._cache_types['empty'];
+                /*bindings = MODELS[p_type+"_empty"] ;
+        	model = this._cache_types['empty'];*/
+                var md = MODELS[p_type+"_empty"];
+                if(md){bindings = md.bindings;
+                model = md.template;
+                recycle = md.recycle;
+                
+                this._ftw2_type = p_type+"_empty";}
         }
         else{
                 while (proto != null){
@@ -1025,9 +1062,15 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
                         if (presenter_type in MODELS){
 
                                 var item_type = proto.constructor.name;
-                                bindings = MODELS[presenter_type] ;
-                                model = this._cache_types[item_type];//root_model.querySelector("[data-type='"+item_type+"']");
-                                break;
+                                /*bindings = MODELS[presenter_type] ;
+                                model = this._cache_types[item_type];//root_model.querySelector("[data-type='"+item_type+"']");*/
+                                var md = MODELS[presenter_type];
+                                if(md){bindings = md.bindings;
+                                model = md.template;
+                                recycle = md.recycle;
+                                
+                                this._ftw2_type = presenter_type;
+                                break;}
                         }
                         //sinon, suivant
                         proto = proto.__proto__;
@@ -1039,106 +1082,198 @@ __model_binding.prototype._populate_model = function(context, mroot,type, deep){
         if (model == null){
                 //celui par defaut
                 item_type = "defaut";
-                bindings = MODELS[p_type] ;
+                /*bindings = MODELS[p_type] ;
                 
-                model = this._cache_types['defaut'];
+                model = this._cache_types['defaut'];*/
+                var md = MODELS[p_type];
+                if(md){
+                bindings = md.bindings;
+                model = md.template;
+                recycle = md.recycle;
+                this._ftw2_type = p_type;
+                }
         }
 
 
 
         if (model == null ){
 
-                this._element[this.to] = " unknown model! "+context;//pas de model, ne fait rien
+                //this._element[this.to] = " unknown model! "+context;//pas de model, ne fait rien
                 return;
         }
 
-        //fait une copie du model
-
-        var cpy_model = model.cloneNode(true);
-
-        //ajoute le type de données dans le htmlelement, j'ai pas trouvé comment faire
-        //autrement...
-
-        cpy_model._ftw2_type = item_type;
-        frag = cpy_model;
-
-
-        //fait une copie des bindings de se model et ajoute aux bindings de la page a apartir de la copie
         
-        
-        for(var key in bindings){
-                //("clé:"+key);
+        console.log("populate model: item type: "+this._ftw2_type);
+        if (recycle.length > 0){
+                //recupere la template et bindings associés
+                console.log("Recuperation d'un template dans recycle!");
+                var r = recycle.pop();
+                frag = r[0];
+                bindings = r[1];
+                console.log(bindings);
+                //enregistre les bindings
+                for(var key in bindings){
+                        console.log("clé:"+key);
 
-                var bd = [];
-                var h=bindings[key].length;
-                //("nbr de bindings: "+h);
-                while(h--){
-                        //copie les infos du binding
-                        var infos = {};
-                        var inf = bindings[key][h];
-                        for(var k in inf){
-                                infos[k]=inf[k];
-                        }
-
-                        //autorise le process event
-                        infos["process_event"] = true;
-                        
-                        infos._element = cpy_model;
-                        if (infos.path)	infos._element = cpy_model.querySelector(infos.path);
-                        
-                        
-                        var clone = __create_binding_from_infos(infos);//cree le binding, passe la valeur a binder pour determiner le type
-                        //("deep:"+deep_binding);
-                        //(context.__uuid__);
-                        if (context.__uuid__ && deep_binding === true){
-                                //gestion du 'alt' ------------------------------------------------
-                                var keys =  this.getBindingKeys(infos);
-                                var kk = keys.length;
-                                while(kk--){
-                                //enregistre les bindings
-                                    var n_key = keys[kk];
-                                    
-                                    //si processinput, utilise UUID du contexte globale
-                                    var g_key =context.__uuid__+":"+n_key;
-                                    //("clé de binding: "+g_key);
-                                    if (g_key in BINDINGS){
-                                        //deja connu, ajoute simplement a la liste
-                                        BINDINGS[g_key].push(clone);
-                                    }
-                                    else {
-                                        //inconnu, cree une nouvelle entr�e
-                                        BINDINGS[g_key]= [clone] ;
-                                    }
-                                    
-                                    //enregistre pour pouvoir nettoyer plus tard....
-                                    if (g_key in current_keys){
-                                        //deja connu, ajoute simplement a la liste
-
-                                        current_keys[g_key].push(clone);
-                                    }
-                                    else {
-                                        //inconnu, cree une nouvelle entr�e
-
-                                        current_keys[g_key]= [clone] ;
-                                    }
-
-
+                        var bd = [];
+                        var h=bindings[key].length;
+                        console.log("nbr de bindings: "+h);
+                        while(h--){
+                                var clone = bindings[key][h];
+                                console.log(clone);
+                                //copie les infos du binding
+                                /*var infos = {};
+                                var inf = bindings[key][h];
+                                for(var k in inf){
+                                        infos[k]=inf[k];
                                 }
+
+                                //autorise le process event
+                                infos["process_event"] = true;
+                                
+                                infos._element = cpy_model;
+                                if (infos.path)	infos._element = cpy_model.querySelector(infos.path);
+                                
+                                
+                                var clone = __create_binding_from_infos(infos);//cree le binding, passe la valeur a binder pour determiner le type
+                                //("deep:"+deep_binding);
+                                //(context.__uuid__);*/
+                                if (context.__uuid__){
+                                        //gestion du 'alt' ------------------------------------------------
+                                        var keys =  clone.getBindingKeys();
+                                        var kk = keys.length;
+                                        while(kk--){
+                                        //enregistre les bindings
+                                            var n_key = keys[kk];
+                                            
+                                            //si processinput, utilise UUID du contexte globale
+                                            var g_key =context.__uuid__+":"+n_key;
+                                            console.log("clé de binding: "+g_key);
+                                            if ( deep_binding === true){
+                                                    if (g_key in BINDINGS){
+                                                        //deja connu, ajoute simplement a la liste
+                                                        BINDINGS[g_key].push(clone);
+                                                    }
+                                                    else {
+                                                        //inconnu, cree une nouvelle entr�e
+                                                        BINDINGS[g_key]= [clone] ;
+                                                    }
+                                            }   
+                                            //enregistre pour pouvoir nettoyer plus tard....
+                                            if (g_key in current_keys){
+                                                //deja connu, ajoute simplement a la liste
+
+                                                current_keys[g_key].push(clone);
+                                            }
+                                            else {
+                                                //inconnu, cree une nouvelle entr�e
+
+                                                current_keys[g_key]= [clone] ;
+                                            }
+
+
+                                        }
+                                }
+
+                                //enregistre le binding
+                                bd.push(clone);
+                                console.log("notify recycle");
+                                clone.init(context);
+
                         }
 
-                        //enregistre le binding
-                        bd.push(clone);
-                        clone.init(context);
+                        __notifyDatasetChanged(context,bd, key);
+                }
+        }
+        else
+        {
+                console.log("Creation d'un nouveau model");
+                var cpy_model = model.cloneNode(true);
+                frag = cpy_model;
+        
+        
+                //cree les bindings necessaires
+        
+                for(var key in bindings){
+                        console.log("clé:"+key);
 
+                        var bd = [];
+                        var h=bindings[key].length;
+                        //("nbr de bindings: "+h);
+                        while(h--){
+                                //copie les infos du binding
+                                var infos = {};
+                                var inf = bindings[key][h];
+                                for(var k in inf){
+                                        infos[k]=inf[k];
+                                }
+
+                                //autorise le process event
+                                infos["process_event"] = true;
+                                
+                                infos._element = cpy_model;
+                                if (infos.path)	infos._element = cpy_model.querySelector(infos.path);
+                                
+                                
+                                var clone = __create_binding_from_infos(infos);//cree le binding, passe la valeur a binder pour determiner le type
+                                //("deep:"+deep_binding);
+                                //(context.__uuid__);
+                                if (context.__uuid__){
+                                        //gestion du 'alt' ------------------------------------------------
+                                        var keys =  this.getBindingKeys(infos);
+                                        var kk = keys.length;
+                                        while(kk--){
+                                        //enregistre les bindings
+                                            var n_key = keys[kk];
+                                            
+                                            //si processinput, utilise UUID du contexte globale
+                                            var g_key =context.__uuid__+":"+n_key;
+                                            //("clé de binding: "+g_key);
+                                            if ( deep_binding === true) {
+                                                    if (g_key in BINDINGS){
+                                                        //deja connu, ajoute simplement a la liste
+                                                        BINDINGS[g_key].push(clone);
+                                                    }
+                                                    else {
+                                                        //inconnu, cree une nouvelle entr�e
+                                                        BINDINGS[g_key]= [clone] ;
+                                                    }
+                                            }
+                                            //enregistre pour pouvoir nettoyer plus tard....
+                                            if (g_key in current_keys){
+                                                //deja connu, ajoute simplement a la liste
+
+                                                current_keys[g_key].push(clone);
+                                            }
+                                            else {
+                                                //inconnu, cree une nouvelle entr�e
+
+                                                current_keys[g_key]= [clone] ;
+                                            }
+
+
+                                        }
+                                }
+
+                                //enregistre le binding
+                                bd.push(clone);
+                                clone.init(context);
+
+                        }
+
+                        __notifyDatasetChanged(context,bd, key);
                 }
 
-                __notifyDatasetChanged(context,bd, key);
         }
-
-       
         //("nbr de clés de bindings global crées: ");
         //(current_keys);
-        this._generated_keys = current_keys;//enregistre les clés de bindings de ce model uniquement!
+        //doit ajouter a la fin du tableau...
+        //probleme, si array, se retrouve avec pour chq items un array de bindings
+        //modif, enregistre les keys en tant 
+        frag._ftw2_type = this._ftw2_type;//le type de données pour cette vue
+        this._generated_keys.push(current_keys);
+        //probleme, pour un array, toutes les clés seront présentes, doit faire une selection...
+        //this._generated_keys = current_keys;//enregistre les clés de bindings de ce model uniquement!
         return frag;
     }
     
@@ -1259,7 +1394,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
 
                     //nettoie les elements html inutiles si besoin
                     //this._clean_child(frag.children[ci], frag);
-                    this._clean(frag, frag.children[ci]);
+                    this._clean(frag, frag.children[ci], ci);
                     var item = value[ci];
                     var result = this._populate_item(item);
                     //result.__uuid__ = item.__uuid__;//pour pouvoir le retrouver plus tard...
@@ -1277,7 +1412,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
                 case 'POP':{
                     //supprime le  dernier de la listes
                     //this._clean_child(frag.children[frag.children.length -1], frag);
-                    this._clean(frag, frag.children[frag.children.length -1]);
+                    this._clean(frag, frag.children[frag.children.length -1],frag.children.length -1);
                     //replace l'element dans la page
                     //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
@@ -1304,7 +1439,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
                 case 'SHIFT':{
                     //retire le premier element
                     //this._clean_child(frag.children[0],frag);
-                    this._clean(frag, frag.children[0]);
+                    this._clean(frag, frag.children[0],0);
                      //replace l'element dans la page
                     //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
                     return;
@@ -1335,7 +1470,8 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
                     
                     
                     for (var ci=index;ci<index+howmany;ci++){
-                            this._clean(frag, frag.children[index]);
+                            //console.log(frag.children[index]);
+                            this._clean(frag, frag.children[index], ci);
                             //this._clean_child(frag.children[ci],frag);//par defaut, supprime tous les childs de la liste
                     }
                     
@@ -1367,7 +1503,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
 
 
 
-
+        console.log("remove all array!");
         
         var removeChilds = frag.children ;
         if (removeChilds==null){
@@ -1384,7 +1520,7 @@ __model_binding.prototype.populate_array = function (value, context, extra, frag
         //nettoie les elements html inutiles si besoin
         for(var ci=removeChilds.length-1;ci>=0;ci--){
             //this._clean_child(removeChilds[ci], frag);
-            this._clean(frag, removeChilds[ci]);
+            this._clean(frag, removeChilds[ci], ci);
         }
 
         //ajoute les nouveaux elements
@@ -1411,6 +1547,7 @@ __model_binding.prototype._populate_item = function(context, parent, extra){
         }
 
         //ajoute l'element d'un coup, pas besoin de fragment?
+        //console.log("populate item");
         var child = this._populate_model(context);//le html generé
 
         this._key_uuid_ = context.__uuid__+":"+this.from;
@@ -1434,16 +1571,15 @@ __model_binding.prototype.populate = function(value, parent, extra){
         //si un textnode, supprime
         if (frag.firstChild && frag.firstChild.nodeType===3) frag.removeChild(frag.firstChild);
 
-
+        //force le redraw aussi?
         fragment.appendChild(frag);//ajoute directement l'element au fragment...
-
         
         //probleme! si deep=false et array, n'est pas detecté!!!
         if (value && (value.__proto__ == DBArray || value instanceof Array) ) this.populate_array(value,parent,extra,frag);
         else this.populate_object(value,parent,extra,frag);
         
-        if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
-        
+        //if (sibling){ parent.insertBefore(frag, sibling);}else{parent.appendChild(frag);}
+        if (sibling){_dom_batch_.dom_batch_insertBefore(parent,frag,sibling);}else{_dom_batch_.dom_batch_append_child(parent,frag);}
         
         /*
         A REMETTRE DANS POPULATE_OBJET ET POPULATE_ARRAY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1537,9 +1673,6 @@ __model_binding.prototype.populate = function(value, parent, extra){
   command_binding.js:
 
 */
-function CommandBindingElement(){
-        this._cmd_binding = null;
-}
 /*binding d'une commande*/
 function __command_binding(infos){
 
@@ -1624,59 +1757,24 @@ __command_binding.prototype =cb_pr;
 //initialise la commande
 	//@param ctx: le context de donnée
 __command_binding.prototype.init = function(ctx){
+        
         this.context=ctx;
         if (this.command != null && this.to!=null){
                 
 
             this._element.addEventListener(this.to,this.__process_event);
             //addCommandListener(this._element, this.to,this.__process_event);
-            this._element._cmd_binding = this;                                                                                  // memory leaks?????? TODO
+            //this._element._cmd_binding = this;                                                                                  // memory leaks?????? TODO
         }
 };
 __command_binding.prototype.populate = function (value, context, extra){
-        this.init(context);
+        //this.init(context);
 };
 __command_binding.prototype._clean = function(){
         //supprime le listener
-        
         this._element.removeEventListener(this.to,this.__process_event );
+        this.context = null;
 }
-/*
-__command_binding.prototype.__process_event = function(evt){
-        
-        bind = this._cmd_binding;// PAS BON!
-        
-        if (bind == null || bind.context == null) return;
-        
-        
-        //recupere le nom de la methode
-        var value = bind.command;
-        if(value == null) value = bind.fallback;
-        value = bind.convert_value (value, bind.context);
-        params = null;
-        //appel a la methode, passe les données
-        if (bind.command_params!=null){
-            params=[];
-
-
-            for (cpi=0;cpi<bind.command_params.length;cpi++){
-                if (bind.command_params[cpi][0]=="$"){
-                    //recupere le nom de la prop
-                    var prop = bind.command_params[cpi].substr(1);
-
-                    if (prop in bind.context) params.push(bind.context[prop]);//par valeur
-                    else params.push('null');
-                }
-                else params.push(bind.command_params[cpi]);
-            }
-
-        }
-        
-        
-        CONTEXT[value](evt,params);
-
-    
-}*/
     
     
     ;//--require property_binding
@@ -1697,10 +1795,6 @@ __command_binding.prototype.__process_event = function(evt){
 
 */
 
-function InputBindingElement(){
-        //definie une prop assez important pour mon code ici
-        this._input_binding = null;
-}
   
 /*binding d'un element de formulaire (input?)*/
 function __input_binding(infos){
@@ -1743,11 +1837,13 @@ function __input_binding(infos){
                                                 //remet la valeur par defaut, voir si c'est le comportement le plus normal
                                                 var value = bind.convert_value (bind.context[bind.from], bind.context);
                                                 if(value === null || value === undefined || value==="") {
-                                                    bind._element.placeholder = this.fallback;
+                                                    //bind._element.placeholder = this.fallback;
+                                                    _dom_batch_.dom_batch_set_property(bind._element,"placeholder",bind.fallback);
                                                     return;
                                                 }
                                                 //met a jour l'UI
-                                                bind._element[bind.to] = value;
+                                                //bind._element[bind.to] = value;
+                                                _dom_batch_.dom_batch_set_property(bind._element, bind.to, value);
                                                                 
                                                 //supprime le message d'erreur, probleme, doit attendre un peu...
                                                 //une autre closure inutile?
@@ -1769,12 +1865,13 @@ function __input_binding(infos){
                                                                  //remet la valeur????
                                                                 value = bind.convert_value (bind.context[bind.from], bind.context);
                                                                 if(value === null || value === undefined || value==="") {
-                                                                    bind._element.placeholder = this.fallback;
-                                                                    bind._element.value="";
+                                                                    _dom_batch_.dom_batch_set_property(bind._element,"placeholder",bind.fallback);
+                                                                    _dom_batch_.dom_batch_set_property(bind._element,"value","");
                                                                     return;
                                                                 }
                                                                 //met a jour l'UI
-                                                                bind._element[bind.to] = value;
+                                                                //bind._element[bind.to] = value;
+                                                                _dom_batch_.dom_batch_set_property(bind._element,bind.to,value);
                                                                 
                                                                 //remet le custom validity a null?
                                                                 //supprime le message d'erreur, probleme, doit attendre un peu...
@@ -1820,94 +1917,13 @@ __input_binding.prototype.init = function(context){
                 //addCommandListener(this._element, this._event, this.on_process_event);
                 this.context = context;//enregistre le context de donn�es pour plus tard....
 		//penser a nettoyer ca plus tard...
-                this._element._input_binding = this;//il faudrait eviter de stocker des infos dans les elements ==========> TODO
+                //this._element._input_binding = this;//il faudrait eviter de stocker des infos dans les elements ==========> TODO
         }
 __input_binding.prototype._clean = function(){
         
         this._element.removeEventListener(this._event,this.on_process_event );
+        this.context=null;
 }
-/*
-__input_binding.prototype.on_process_event = function(evt){
-
-                var bind = this._input_binding;
-                if(bind == null || bind.context == null) return;
-                
-                
-		var value = bind.return_value === true ? this.value : this[bind.to];
-                if(value == null || value == undefined || value=="") {
-                    this.placeholder = bind.fallback;
-                    
-                }
-                
-                
-		try{
-			bind.mirror(value);//appel a methode mirror de l'event, ie evite le notify
-			this.setCustomValidity("");
-                        
-		}catch(err){
-			
-			this.setCustomValidity(err.message);
-                        
-                        //si a un formulaire, utilise la validation pour afficher les popups
-                        if (this.form){
-                                if(this.form.reportValidity){
-                                        window.setTimeout(function(){
-                                                //PROBLEME DE CLOSURE ICI: bind
-                                                bind._element.form.reportValidity();//doit empecher le submit normalement et afficher les messages d'erreurs...
-                                                //remet la valeur par defaut, voir si c'est le comportement le plus normal
-                                                var value = bind.convert_value (bind.context[bind.from], bind.context);
-                                                if(value === null || value === undefined || value==="") {
-                                                    bind._element.placeholder = this.fallback;
-                                                    return;
-                                                }
-                                                //met a jour l'UI
-                                                bind._element[bind.to] = value;
-                                                                
-                                                //supprime le message d'erreur, probleme, doit attendre un peu...
-                                                //une autre closure inutile?
-                                                window.setTimeout(function(){
-                                                                bind._element.setCustomValidity("");
-                                                        },2000);
-                                        });
-                                }
-                                else {
-                                        //recupere le bouton submit si existe...
-                                        form = bind._element.form;
-                                        
-                                        for (i=form.length-1;i>=0;i--){
-                                                var input = form[i];
-                                                if (input.getAttribute("type")=="submit") {
-                                                        window.setTimeout(function(){
-                                                                input.click();
-                                                                
-                                                                 //remet la valeur????
-                                                                value = bind.convert_value (bind.context[bind.from], bind.context);
-                                                                if(value === null || value === undefined || value==="") {
-                                                                    bind._element.placeholder = this.fallback;
-                                                                    bind._element.value="";
-                                                                    return;
-                                                                }
-                                                                //met a jour l'UI
-                                                                bind._element[bind.to] = value;
-                                                                
-                                                                //remet le custom validity a null?
-                                                                //supprime le message d'erreur, probleme, doit attendre un peu...
-                                                                window.setTimeout(function(){
-                                                                        bind._element.setCustomValidity("");
-                                                                        //("Remise a zero de la custom validity...");
-                                                                },2000);//laisse le message 1sec
-                                                                
-                                                        }, 20);
-                                                        return;
-                                                }
-                                        }
-                                       
-                                }
-                                
-                        }
-		}
-};*/
-
 
 //met a jour la donnée javascript
 //@param value: la valeur entrée par l'utilisateur
@@ -1931,13 +1947,15 @@ __input_binding.prototype.populate = function(value, context, extra){
                 //une property de l'element, modifie directement et completement
 		value = this.convert_value (value, context);
                 if(value === null || value === undefined || value==="") {
-                    this._element.placeholder = this.fallback;
-                    if (this.to == "value") this._element.value="";//laisse le placeholder
-                    else    this._element[this.to]=this.fallback;
+                    _dom_batch_.dom_batch_set_property(this._element, "placeholder", this.fallback);
+                    //this._element.placeholder = this.fallback;
+                    if (this.to == "value") _dom_batch_.dom_batch_set_property(this._element, "value", "");//this._element.value="";//laisse le placeholder
+                    else    _dom_batch_.dom_batch_set_property(this._element, this.to, this.fallback);//this._element[this.to]=this.fallback;
                     return;
                 }
 		//met a jour l'UI
-		this._element[this.to] = value;
+		//this._element[this.to] = value;
+                _dom_batch_.dom_batch_set_property(this._element, this.to, value);
     }
 
 ;//--require model_binding
@@ -2407,6 +2425,190 @@ function clear_events (child){
    
    
 
+;//permet de faire un pool de modifications a apporter au DOM
+// en utilisant un requestAnimationFrame (pour controler qd cela se produit et 
+//combien de temps on lui laisse pour le faire
+//inspiration: fastdom par Wilson Page <wilsonpage@me.com> et Kornel Lesinski <kornel.lesinski@ft.com>
+
+
+//une commande pour le dom batch, permet de savoir quoi faire (append, insert, modifie un attribut....)
+//liste chain�e (doublement?)
+function dom_batch_command (arguments){
+        this._next = null; //pour ma chaine, permet de connaitre le suivant sur la liste        
+        this._params = arguments;//les parametres, depend de l'action, un simple tableau avec:
+        //0: l'action a realiser (append,...)
+        //1...n: les parametres necessaires
+}
+var BATCH_RECYCLE = [];
+function batch_optain(){
+        var tmp = null;
+        if (BATCH_RECYCLE.length>0){
+                tmp = BATCH_RECYCLE.pop();
+                tmp._params = arguments;
+        }
+        else tmp = new dom_batch_command(arguments);
+        return tmp;               
+}
+function batch_recycle(b){ 
+        b._next = null;
+        b._params = null;
+        BATCH_RECYCLE.push(b); 
+}
+//qqs actions basiques
+var BATCH_APPEND = 0;//params: parent, child
+var BATCH_REMOVE = 1;//params: parent, child
+var BATCH_INSERT_BEFORE = 2;//params: parent, child, reference
+var BATCH_SET_ATTRIBUTE = 3;//params: node, attribute name, attribute value
+var BATCH_SET_PROPERTY = 4;//params: node, propery name, property value
+//...
+
+
+
+function dom_batch ( ){
+        this.dom_batch_budget = 10; //le temps en millisecondes pour effectuer une mise a jour du dom
+                //si il reste des updates, on le fera dans une prochaine frame...
+        this.raf_called = false;
+        
+        //@debug
+        this.infos = function(){
+                return "INFOS: called:"+this.raf_called;
+        }
+        
+        //pour le timer
+        this.performance = window.performance || {};
+        this.performance.now = performance.now       ||
+                performance.mozNow    ||
+                performance.msNow     ||
+                performance.oNow      ||
+                performance.webkitNow ||            
+                Date.now  ;/*none found - fallback to browser default */
+
+        //les buffers pour suppression d'un element, ajout d'une element
+        /*this.dom_batch_suppress = [];
+        this.dom_batch_append = [];
+        this.dom_batch_inserts = [];*/
+        this._commands = null;
+        this._last = null;//pour ajouter facilement les commandes
+
+        this.append_command = function (cmd){
+                if (this._last!=null) {
+                        this._last._next = cmd;
+                } else {
+                        this._commands = cmd;
+                }
+                this._last = cmd;
+                
+        }
+        //les methodes a appeller en place de appendChild et removeChild
+        //ajoute a la queue et demande la mise a jour dans prochaine frame
+        this.dom_batch_removeChild = function(parent, child){
+                
+                //cree une nouvelle commande
+                var cmd = batch_optain(BATCH_REMOVE,parent, child);
+                //ajoute a la liste
+                this.append_command(cmd);
+                this.update_dom();//demande la mise a jour si possible
+        }
+        this.dom_batch_append_child = function(parent, child){
+                var cmd =batch_optain(BATCH_APPEND,parent, child);
+                this.append_command(cmd);
+                this.update_dom();//demande la mise a jour si possible
+        }
+        this.dom_batch_insertBefore = function(parent, child, before){
+                var cmd = batch_optain(BATCH_INSERT_BEFORE,parent, child, before);
+                this.append_command(cmd);
+                this.update_dom();//demande la mise a jour si possible
+        }
+        this.dom_batch_set_attribute = function(node, attr_name, attr_value){
+                var cmd = batch_optain(BATCH_SET_ATTRIBUTE,node, attr_name, attr_value);
+                this.append_command(cmd);
+                this.update_dom();//demande la mise a jour si possible
+        }
+        this.dom_batch_set_property = function(node, p_name, p_value){
+                var cmd = batch_optain(BATCH_SET_PROPERTY,node, p_name, p_value);
+                this.append_command(cmd);
+                this.update_dom();//demande la mise a jour si possible
+        }
+        
+        
+        this.update_dom=function(force){
+                if (!this.raf_called || force){
+                        this.raf_called = true;
+                        r_a_f(dom_batch_update_dom);
+                }
+        }
+        
+};
+r_a_f =  window.requestAnimationFrame //normal
+          || win.webkitRequestAnimationFrame  //webkit
+          || win.mozRequestAnimationFrame //firefox old
+          || function(callback) { return setTimeout(callback, 16); }; //16ms = 60fps, le budget conseill� pour une webapp, si requestAF non dispo
+//la m�thode de mise a jour du dom
+function dom_batch_update_dom (delay){
+                
+                var batch = _dom_batch_;
+                var cmds = batch._commands;
+                if (!cmds) return;
+                
+                
+                var start = batch.performance.now();//le debut de l'update en ms
+                var last = batch.dom_batch_budget;
+                
+                //supprime d'abords
+                while (last>0 && cmds!=null){
+                        var task = cmds._params;
+                        var tmp = cmds;
+                        cmds = cmds._next;
+                        
+                        batch_recycle(tmp);
+                        
+                        var action = task[0];
+                        //suivant l'action, possible d'eviter le switch en ayant le nom de la fonction?
+                        switch(action){
+                                case 0:
+                                {
+                                        //append
+                                        task[1].appendChild(task[2]);
+                                        break;
+                                }
+                                case 1:
+                                {
+                                        task[1].removeChild(task[2]);
+                                        break;
+                                }
+                                case 2:
+                                {
+                                        task[1].insertBefore(task[2],task[3]);
+                                        break;
+                                }
+                                case 3:
+                                {
+                                        task[1].setAttribute(task[2], task[3]);
+                                        break;
+                                }
+                                case 4:
+                                {
+                                        task[1][task[2]]=task[3];
+                                        break;
+                                }
+                                default: break;
+                        }
+                        last -= _dom_batch_.performance.now() - start;
+                }
+                
+                batch._commands = cmds;
+                //si il en reste, prochaine frame
+                if (cmds!=null) _dom_batch_.update_dom(true);//demande la mise a jour
+                //sinon, fini!
+                else {
+                        //console.log(_dom_batch_.infos());
+                        batch._last = null;
+                        batch._commands = null;
+                        _dom_batch_.raf_called=false;
+                }
+                
+}
+var _dom_batch_ = new dom_batch();
 ;/*
   ----------------------------------------------------------------------------
   "THE BEER-WARE LICENSE" (Revision 42):
@@ -2552,7 +2754,7 @@ function __get_bindings(root, process_event, search){
         if (bindings!=null && bindings.length > 0)__prepare_binding(bindings, process_event, pg_bindings);
                 
 
-
+    //un tableau avec tous les bindings du model
     return pg_bindings;
 }
 
@@ -2721,6 +2923,7 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
         return bind;
 }
 
+
 //fabrique pour les bindings
 //@paam d_b: binding infos
 //@param return: le binding trouvé
@@ -2847,7 +3050,7 @@ function AppInit(){
                 model_node.style.display = "none";
 
                 models = model_node.querySelectorAll("body>div[data-role=presenters]>[data-role=presenter]");
-
+                //pour chque model trouvé....
                 for (moi=0;moi<models.length;moi++){
                         var model = models[moi];
 
@@ -2879,7 +3082,11 @@ function AppInit(){
                         //ici, si plusieurs childs, veut dire plusieurs data-type
                         if (children.length == 1){
                                 //cree les bindings pour ce model
-                                MODELS[id] = __get_bindings(children[0], false);//false: ne met pas en place les events handlers
+                                //bindings: les bindings presents dans le model
+                                //template: le template/presenter html pour le model
+                                //recycle: des presenters deja crées pour reutilisation
+                                //MODELS[id] = __get_bindings(children[0], false);//false: ne met pas en place les events handlers
+                                MODELS[id] ={bindings: __get_bindings(children[0], false), template: children[0], recycle:[]};
                         } else {
                                 //utilise des data-types, doit creer un binding par data-type
                                 for (c_i = 0; c_i < children.length; c_i++){
@@ -2888,13 +3095,17 @@ function AppInit(){
                                     
                                     if (dtype == null){
                                         //model par defaut
-                                        MODELS[id] = __get_bindings(mdl, false);
+                                        //MODELS[id] = __get_bindings(mdl, false);
+                                        MODELS[id] = {bindings: __get_bindings(mdl, false), template: mdl, recycle:[]};
                                     } else {
                                         //un datatype
-                                        MODELS[id+"_"+dtype] = __get_bindings(mdl, false);
+                                        MODELS[id+"_"+dtype] = {bindings: __get_bindings(mdl, false), template: mdl, recycle:[]};
                                     }
                                 }
                         }
+                        
+                        
+                        //comment faire pour eviter a chaque initialisation de binding model de devoir recuperer le html????
                 }
 
         }

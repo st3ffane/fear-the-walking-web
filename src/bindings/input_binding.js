@@ -16,10 +16,6 @@
 
 */
 
-function InputBindingElement(){
-        //definie une prop assez important pour mon code ici
-        this._input_binding = null;
-}
   
 /*binding d'un element de formulaire (input?)*/
 function __input_binding(infos){
@@ -62,11 +58,13 @@ function __input_binding(infos){
                                                 //remet la valeur par defaut, voir si c'est le comportement le plus normal
                                                 var value = bind.convert_value (bind.context[bind.from], bind.context);
                                                 if(value === null || value === undefined || value==="") {
-                                                    bind._element.placeholder = this.fallback;
+                                                    //bind._element.placeholder = this.fallback;
+                                                    _dom_batch_.dom_batch_set_property(bind._element,"placeholder",bind.fallback);
                                                     return;
                                                 }
                                                 //met a jour l'UI
-                                                bind._element[bind.to] = value;
+                                                //bind._element[bind.to] = value;
+                                                _dom_batch_.dom_batch_set_property(bind._element, bind.to, value);
                                                                 
                                                 //supprime le message d'erreur, probleme, doit attendre un peu...
                                                 //une autre closure inutile?
@@ -88,12 +86,13 @@ function __input_binding(infos){
                                                                  //remet la valeur????
                                                                 value = bind.convert_value (bind.context[bind.from], bind.context);
                                                                 if(value === null || value === undefined || value==="") {
-                                                                    bind._element.placeholder = this.fallback;
-                                                                    bind._element.value="";
+                                                                    _dom_batch_.dom_batch_set_property(bind._element,"placeholder",bind.fallback);
+                                                                    _dom_batch_.dom_batch_set_property(bind._element,"value","");
                                                                     return;
                                                                 }
                                                                 //met a jour l'UI
-                                                                bind._element[bind.to] = value;
+                                                                //bind._element[bind.to] = value;
+                                                                _dom_batch_.dom_batch_set_property(bind._element,bind.to,value);
                                                                 
                                                                 //remet le custom validity a null?
                                                                 //supprime le message d'erreur, probleme, doit attendre un peu...
@@ -139,94 +138,13 @@ __input_binding.prototype.init = function(context){
                 //addCommandListener(this._element, this._event, this.on_process_event);
                 this.context = context;//enregistre le context de donn�es pour plus tard....
 		//penser a nettoyer ca plus tard...
-                this._element._input_binding = this;//il faudrait eviter de stocker des infos dans les elements ==========> TODO
+                //this._element._input_binding = this;//il faudrait eviter de stocker des infos dans les elements ==========> TODO
         }
 __input_binding.prototype._clean = function(){
         
         this._element.removeEventListener(this._event,this.on_process_event );
+        this.context=null;
 }
-/*
-__input_binding.prototype.on_process_event = function(evt){
-
-                var bind = this._input_binding;
-                if(bind == null || bind.context == null) return;
-                
-                
-		var value = bind.return_value === true ? this.value : this[bind.to];
-                if(value == null || value == undefined || value=="") {
-                    this.placeholder = bind.fallback;
-                    
-                }
-                
-                
-		try{
-			bind.mirror(value);//appel a methode mirror de l'event, ie evite le notify
-			this.setCustomValidity("");
-                        
-		}catch(err){
-			
-			this.setCustomValidity(err.message);
-                        
-                        //si a un formulaire, utilise la validation pour afficher les popups
-                        if (this.form){
-                                if(this.form.reportValidity){
-                                        window.setTimeout(function(){
-                                                //PROBLEME DE CLOSURE ICI: bind
-                                                bind._element.form.reportValidity();//doit empecher le submit normalement et afficher les messages d'erreurs...
-                                                //remet la valeur par defaut, voir si c'est le comportement le plus normal
-                                                var value = bind.convert_value (bind.context[bind.from], bind.context);
-                                                if(value === null || value === undefined || value==="") {
-                                                    bind._element.placeholder = this.fallback;
-                                                    return;
-                                                }
-                                                //met a jour l'UI
-                                                bind._element[bind.to] = value;
-                                                                
-                                                //supprime le message d'erreur, probleme, doit attendre un peu...
-                                                //une autre closure inutile?
-                                                window.setTimeout(function(){
-                                                                bind._element.setCustomValidity("");
-                                                        },2000);
-                                        });
-                                }
-                                else {
-                                        //recupere le bouton submit si existe...
-                                        form = bind._element.form;
-                                        
-                                        for (i=form.length-1;i>=0;i--){
-                                                var input = form[i];
-                                                if (input.getAttribute("type")=="submit") {
-                                                        window.setTimeout(function(){
-                                                                input.click();
-                                                                
-                                                                 //remet la valeur????
-                                                                value = bind.convert_value (bind.context[bind.from], bind.context);
-                                                                if(value === null || value === undefined || value==="") {
-                                                                    bind._element.placeholder = this.fallback;
-                                                                    bind._element.value="";
-                                                                    return;
-                                                                }
-                                                                //met a jour l'UI
-                                                                bind._element[bind.to] = value;
-                                                                
-                                                                //remet le custom validity a null?
-                                                                //supprime le message d'erreur, probleme, doit attendre un peu...
-                                                                window.setTimeout(function(){
-                                                                        bind._element.setCustomValidity("");
-                                                                        //("Remise a zero de la custom validity...");
-                                                                },2000);//laisse le message 1sec
-                                                                
-                                                        }, 20);
-                                                        return;
-                                                }
-                                        }
-                                       
-                                }
-                                
-                        }
-		}
-};*/
-
 
 //met a jour la donnée javascript
 //@param value: la valeur entrée par l'utilisateur
@@ -250,12 +168,14 @@ __input_binding.prototype.populate = function(value, context, extra){
                 //une property de l'element, modifie directement et completement
 		value = this.convert_value (value, context);
                 if(value === null || value === undefined || value==="") {
-                    this._element.placeholder = this.fallback;
-                    if (this.to == "value") this._element.value="";//laisse le placeholder
-                    else    this._element[this.to]=this.fallback;
+                    _dom_batch_.dom_batch_set_property(this._element, "placeholder", this.fallback);
+                    //this._element.placeholder = this.fallback;
+                    if (this.to == "value") _dom_batch_.dom_batch_set_property(this._element, "value", "");//this._element.value="";//laisse le placeholder
+                    else    _dom_batch_.dom_batch_set_property(this._element, this.to, this.fallback);//this._element[this.to]=this.fallback;
                     return;
                 }
 		//met a jour l'UI
-		this._element[this.to] = value;
+		//this._element[this.to] = value;
+                _dom_batch_.dom_batch_set_property(this._element, this.to, value);
     }
 

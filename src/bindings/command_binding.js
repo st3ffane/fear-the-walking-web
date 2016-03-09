@@ -15,9 +15,6 @@
   command_binding.js:
 
 */
-function CommandBindingElement(){
-        this._cmd_binding = null;
-}
 /*binding d'une commande*/
 function __command_binding(infos){
 
@@ -102,59 +99,24 @@ __command_binding.prototype =cb_pr;
 //initialise la commande
 	//@param ctx: le context de donnée
 __command_binding.prototype.init = function(ctx){
+        
         this.context=ctx;
         if (this.command != null && this.to!=null){
                 
 
             this._element.addEventListener(this.to,this.__process_event);
             //addCommandListener(this._element, this.to,this.__process_event);
-            this._element._cmd_binding = this;                                                                                  // memory leaks?????? TODO
+            //this._element._cmd_binding = this;                                                                                  // memory leaks?????? TODO
         }
 };
 __command_binding.prototype.populate = function (value, context, extra){
-        this.init(context);
+        //this.init(context);
 };
 __command_binding.prototype._clean = function(){
         //supprime le listener
-        
         this._element.removeEventListener(this.to,this.__process_event );
+        this.context = null;
 }
-/*
-__command_binding.prototype.__process_event = function(evt){
-        
-        bind = this._cmd_binding;// PAS BON!
-        
-        if (bind == null || bind.context == null) return;
-        
-        
-        //recupere le nom de la methode
-        var value = bind.command;
-        if(value == null) value = bind.fallback;
-        value = bind.convert_value (value, bind.context);
-        params = null;
-        //appel a la methode, passe les données
-        if (bind.command_params!=null){
-            params=[];
-
-
-            for (cpi=0;cpi<bind.command_params.length;cpi++){
-                if (bind.command_params[cpi][0]=="$"){
-                    //recupere le nom de la prop
-                    var prop = bind.command_params[cpi].substr(1);
-
-                    if (prop in bind.context) params.push(bind.context[prop]);//par valeur
-                    else params.push('null');
-                }
-                else params.push(bind.command_params[cpi]);
-            }
-
-        }
-        
-        
-        CONTEXT[value](evt,params);
-
-    
-}*/
     
     
     

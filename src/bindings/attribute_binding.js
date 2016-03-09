@@ -41,8 +41,10 @@ __attr_binding.prototype.populate = function(value, context, extra){
         //remplace dans la string html, garde ce qu'il y a avant et apres
         var start = this._index == 0 ? "" : dt.substring(0, this._index);
         var end = dt.substring(this._index + this._length);
-
-        this._element.setAttribute(this.to,start + value + end );
+        
+        var finale_value = start + value + end;
+        _dom_batch_.dom_batch_set_attribute(this._element, this.to, finale_value);
+        //this._element.setAttribute(this.to,start + value + end );
         this._key_uuid_ = context.__uuid__+":"+this.from;
     }
 

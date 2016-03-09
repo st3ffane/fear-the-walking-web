@@ -1,0 +1,16 @@
+<html>
+<head><script src="objects.js"></script>
+<body>
+<script>
+function MyTest(){
+        this._a_prop ="hello";
+};
+MyTest.defineBindProperty("a_prop",{get: function(){return this._a_prop;}, set: function(value){this._a_prop= value;} });
+
+
+console.log(MyTest);
+t = new MyTest();
+t.a_prop = "aze";
+console.log(t.a_prop);
+</script>
+</body></html>

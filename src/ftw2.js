@@ -27,7 +27,9 @@ var MODELS = {};	//des binding models a ajouter/supprimer des pages
 /*permet de mettre a jour l'ui lorsqque les datas ont chang�es
 @param key: le nom de la property qui a chang�e ou null pour mettre a jour toute la page
 @args: parametres optinnels ou particulier a un type de binding*/
-//@private
+//TODO: eviter de faire des reflows pour chaque modification
+//IE: si une clé de binding a plusieurs binding associé, bash = documentfragment????
+//2: Bash complet si key == null
 function notifyDatasetChanged(key, extra){
 
         //contexte a prendre en compte////
@@ -141,7 +143,7 @@ function __get_bindings(root, process_event, search){
         if (bindings!=null && bindings.length > 0)__prepare_binding(bindings, process_event, pg_bindings);
                 
 
-
+    //un tableau avec tous les bindings du model
     return pg_bindings;
 }
 
@@ -310,6 +312,7 @@ function __parse_attribute(elem, root, nodeName, value, process_event){
         return bind;
 }
 
+
 //fabrique pour les bindings
 //@paam d_b: binding infos
 //@param return: le binding trouvé
@@ -364,7 +367,7 @@ function __create_binding_from_infos(d_b){
 
 
 // Intialisation des bindings dans la page ----------------------------------------------------------------------------------
-
+//TODO: met en cache les divs des presenters pour recuperation plus rapide apres...
 function AppInit(){
         
         ctx = document.body.getAttribute("data-context");
@@ -436,7 +439,7 @@ function AppInit(){
                 model_node.style.display = "none";
 
                 models = model_node.querySelectorAll("body>div[data-role=presenters]>[data-role=presenter]");
-
+                //pour chque model trouvé....
                 for (moi=0;moi<models.length;moi++){
                         var model = models[moi];
 
@@ -468,7 +471,11 @@ function AppInit(){
                         //ici, si plusieurs childs, veut dire plusieurs data-type
                         if (children.length == 1){
                                 //cree les bindings pour ce model
-                                MODELS[id] = __get_bindings(children[0], false);//false: ne met pas en place les events handlers
+                                //bindings: les bindings presents dans le model
+                                //template: le template/presenter html pour le model
+                                //recycle: des presenters deja crées pour reutilisation
+                                //MODELS[id] = __get_bindings(children[0], false);//false: ne met pas en place les events handlers
+                                MODELS[id] ={bindings: __get_bindings(children[0], false), template: children[0], recycle:[]};
                         } else {
                                 //utilise des data-types, doit creer un binding par data-type
                                 for (c_i = 0; c_i < children.length; c_i++){
@@ -477,13 +484,17 @@ function AppInit(){
                                     
                                     if (dtype == null){
                                         //model par defaut
-                                        MODELS[id] = __get_bindings(mdl, false);
+                                        //MODELS[id] = __get_bindings(mdl, false);
+                                        MODELS[id] = {bindings: __get_bindings(mdl, false), template: mdl, recycle:[]};
                                     } else {
                                         //un datatype
-                                        MODELS[id+"_"+dtype] = __get_bindings(mdl, false);
+                                        MODELS[id+"_"+dtype] = {bindings: __get_bindings(mdl, false), template: mdl, recycle:[]};
                                     }
                                 }
                         }
+                        
+                        
+                        //comment faire pour eviter a chaque initialisation de binding model de devoir recuperer le html????
                 }
 
         }
