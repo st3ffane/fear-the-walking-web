@@ -378,8 +378,10 @@ function AppInit(){
         if (ctx instanceof Function){
                 CONTEXT = new ctx();
         }
-        else CONTEXT = ctx;//permet toujours de recuperer un objet, pour un site tout simple amateur, c'est suffisant
-        
+        else {
+                CONTEXT = ctx;//permet toujours de recuperer un objet, pour un site tout simple amateur, c'est suffisant
+                ctx = CONTEXT.constructor;//recupere le type;
+        }
         if (CONTEXT == null)throw "No context defined!" ;//on verra plus tard!
         
         defineBindObject(CONTEXT);

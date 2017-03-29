@@ -1,10 +1,17 @@
+/* IMPORTANT: installer grunt en global!!!
+npm install -g grunt
+
+pour lancer la compile: 
+$> grunt
+*/
+
 module.exports = function(grunt) {
 
   // Configuration de Grunt
   grunt.initConfig({
         concat: {
               options: {
-                separator: ';', // permet d'ajouter un point-virgule entre chaque fichier concaténé.
+                separator: ';', // permet d'ajouter un point-virgule entre chaque fichier concatï¿½nï¿½.
               },
               dist: {
                 src: ['src/datas/objects.js',
@@ -42,10 +49,10 @@ module.exports = function(grunt) {
         }
   })
 
-  // Définition des tâches Grunt
-  grunt.loadNpmTasks('grunt-contrib-concat'); // Voilà l'ajout.
-  grunt.loadNpmTasks('grunt-contrib-uglify'); // Voilà l'ajout.
-  grunt.loadNpmTasks('grunt-umd'); // Voilà l'ajout.
+  // Dï¿½finition des tï¿½ches Grunt
+  grunt.loadNpmTasks('grunt-contrib-concat'); // Voilï¿½ l'ajout.
+  grunt.loadNpmTasks('grunt-contrib-uglify'); // Voilï¿½ l'ajout.
+  grunt.loadNpmTasks('grunt-umd'); // Voilï¿½ l'ajout.
   
   grunt.registerTask('default', ['concat:dist','umd:all','uglify:dist'])
 

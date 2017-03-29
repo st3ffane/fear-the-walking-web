@@ -1,0 +1,30 @@
+{
+  "name": "fear-the-walking-web",
+  "version": "1.0.0",
+  "description": "",
+  "main": "Gruntfile.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "dependencies": {
+    "grunt": "^1.0.1",
+    "grunt-contrib-concat": "^1.0.1",
+    "grunt-contrib-uglify": "^2.2.0",
+    "grunt-umd": "^2.4.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build":""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/st3ffane/fear-the-walking-web.git"
+  },
+  "author": "steph.ponteins@gmail.com",
+  "license": "Beerware",
+  "bugs": {
+    "url": "https://github.com/st3ffane/fear-the-walking-web/issues"
+  },
+  "homepage": "https://github.com/st3ffane/fear-the-walking-web#readme"
+}
