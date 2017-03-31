@@ -1688,7 +1688,7 @@ function __command_binding(infos){
                 if (bind.command_params[cpi][0]=="$"){
                     //recupere le nom de la prop
                     var prop = bind.command_params[cpi].substr(1);
-
+                    if(prop == "this") params.push(bind.context);//le context lui meme
                     if (prop in bind.context) params.push(bind.context[prop]);//par valeur
                     else params.push('null');
                 }
