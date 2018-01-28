@@ -16,7 +16,7 @@ module.exports = webpackMerge(webpackCommon, {
 
   output: {
 
-    path: path.resolve(__dirname, '../static/dist'),
+    path: path.resolve(__dirname, '../demo/static/dist'),
 
     filename: '[name].js',
 
@@ -67,8 +67,8 @@ module.exports = webpackMerge(webpackCommon, {
     }),
     new HtmlWebpackPlugin({
       inject: true,
-      template: path.resolve(__dirname, '../static/index.html'),
-      favicon: path.resolve(__dirname, '../static/favicon.ico')
+      template: path.resolve(__dirname, '../demo/static/index.html'),
+      favicon: path.resolve(__dirname, '../demo/static/favicon.ico')
     }),
     new HotModuleReplacementPlugin()
   ],
@@ -76,7 +76,7 @@ module.exports = webpackMerge(webpackCommon, {
   devServer: {
     host: env.devServer.host || 'localhost',
     port: env.devServer.port || 3000,
-    contentBase: path.resolve(__dirname, '../static'),
+    contentBase: path.resolve(__dirname, '../demo/static'),
     watchContentBase: true,
     compress: true,
     hot: true,

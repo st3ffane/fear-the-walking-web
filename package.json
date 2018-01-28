@@ -4,7 +4,7 @@
   "description": "Fear The Walking Web -Rewrite",
   "scripts": {
     "postinstall": "cp env.example.js env.js",
-    "start": "webpack-dev-server --config webpack/dev.config.js --watch",
+    "start:demo": "webpack-dev-server --config webpack/dev.config.js --watch",
     "build": "cross-env NODE_ENV=production webpack --config webpack/prod.config.js --progress --display-error-details --color",
     "precommit": "eslint src"
   },

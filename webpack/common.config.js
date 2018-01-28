@@ -5,9 +5,9 @@ module.exports = {
 
   entry: {
     'app': [
-      './src/bootstrap.js'
+      './demo/bootstrap.js'
     ],
-    'vendor': './src/vendor.js'
+    'ftw2': './src/index.js'
   },
 
   resolve: {
@@ -49,7 +49,7 @@ module.exports = {
 
   plugins: [
     new CommonsChunkPlugin({
-      name: ['app', 'vendor'],
+      name: ['ftw2', 'app'],
       minChunks: Infinity
     })
   ]
