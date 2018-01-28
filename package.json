@@ -1,7 +1,7 @@
 {
-  "name": "kimoar",
-  "version": "0.0.1",
-  "description": "Kimo Augmented Reallity test",
+  "name": "ftw2",
+  "version": "0.0.1rw",
+  "description": "Fear The Walking Web -Rewrite",
   "scripts": {
     "postinstall": "cp env.example.js env.js",
     "start": "webpack-dev-server --config webpack/dev.config.js --watch",
@@ -9,11 +9,9 @@
     "precommit": "eslint src"
   },
   "author": "steph.ponteins@gmail.com",
-  "license": "MIT",
+  "license": "Beerware",
   "dependencies": {
-    "babel-polyfill": "^6.23.0",
-    "jsartoolkit5": "0.0.4",
-    "three": "^0.89.0"
+    "babel-polyfill": "^6.23.0"
   },
   "devDependencies": {
     "autoprefixer": "^7.1.2",
